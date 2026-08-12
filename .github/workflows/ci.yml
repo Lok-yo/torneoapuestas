@@ -5,8 +5,13 @@ on:
     branches: [main]
   pull_request:
 
-# Fail closed: any job failure blocks merge. Jobs run in dependency order
-# via `needs` so a cheap failure (lint) short-circuits expensive ones (e2e).
+# Fail closed: any job failure blocks merge. Jobs run in one strict
+# sequential gate chain via `needs` — frozen install -> lint -> unit tests
+# (with coverage) -> Supabase migrations/RLS/pgTAP -> build -> Playwright
+# e2e -> npm audit — so a cheap, fast failure (lint) always short-circuits
+# every more expensive step after it, and nothing (including the
+# dependency audit) ever runs, or can pass independently, out of order.
+# See tasks.md 7.1.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -44,7 +49,7 @@ jobs:
 
   unit-test:
     name: Unit tests
-    needs: install
+    needs: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +62,7 @@ jobs:
 
   db-migrations:
     name: Supabase migrations, RLS, pgTAP
-    needs: install
+    needs: unit-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +83,7 @@ jobs:
 
   build:
     name: Build
-    needs: [lint, unit-test]
+    needs: db-migrations
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -96,7 +101,7 @@ jobs:
 
   e2e:
     name: Playwright
-    needs: [build, db-migrations]
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -121,7 +126,7 @@ jobs:
 
   audit:
     name: npm audit
-    needs: install
+    needs: e2e
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
