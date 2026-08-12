@@ -3,6 +3,7 @@ import { Trophy, Wallet, LogOut } from 'lucide-react'
 import { useSessionStore } from '../store/useSessionStore.js'
 import { useWalletStore } from '../store/useWalletStore.js'
 import { formatTCRED } from '../lib/format.js'
+import { FEATURE_FLAGS } from '../config/featureFlags.js'
 import Avatar from './Avatar.jsx'
 
 const NAV_LINKS = [
@@ -41,13 +42,15 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           {user?.username ? (
             <>
-              <Link
-                to="/wallet"
-                className="flex items-center gap-1.5 rounded-full border border-zinc-800 px-3 py-1.5 text-sm font-medium text-zinc-200 hover:border-zinc-700"
-              >
-                <Wallet size={14} />
-                {formatTCRED(balance)}
-              </Link>
+              {FEATURE_FLAGS.demoFinancialUI && (
+                <Link
+                  to="/wallet"
+                  className="flex items-center gap-1.5 rounded-full border border-zinc-800 px-3 py-1.5 text-sm font-medium text-zinc-200 hover:border-zinc-700"
+                >
+                  <Wallet size={14} />
+                  {formatTCRED(balance)}
+                </Link>
+              )}
               <Link to={`/jugadores/${user.username}`} className="flex items-center gap-2">
                 <Avatar username={user.username} size={30} />
                 <span className="hidden text-sm font-medium text-zinc-200 sm:inline">

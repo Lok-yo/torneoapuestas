@@ -1,8 +1,9 @@
 // Profile repository: reads/writes the authenticated user's own profile
 // through RLS-scoped Supabase calls and the claim_username RPC. See
 // authenticated-identity spec "Atomic case-insensitive username claim".
-import { supabase, isSupabaseConfigured } from '../lib/supabase.js'
-import { AppError, toAppError } from '../lib/errors.js'
+import { supabase } from '../lib/supabase.js'
+import { toAppError } from '../lib/errors.js'
+import { assertAdapterAvailable } from './adapterAvailability.js'
 
 // Maps the Postgres SQLSTATE codes raised by claim_username's own
 // boundary checks (see 0006_username_claim.sql) to the shared AppError
@@ -14,9 +15,7 @@ const SQLSTATE_TO_ERROR_CODE = {
 }
 
 function assertConfigured() {
-  if (!isSupabaseConfigured) {
-    throw new AppError('UNAVAILABLE', 'El servicio de perfiles no está disponible ahora mismo.')
-  }
+  assertAdapterAvailable('identity', 'El servicio de perfiles no está disponible ahora mismo.')
 }
 
 /**
@@ -54,14 +53,7 @@ export async function getOwnProfile(userId) {
   return data
 }
 
-/** Reads a public profile projection by username (public allowlisted view). */
-export async function getPublicPlayerHistory(username) {
-  assertConfigured()
-  const { data, error } = await supabase
-    .from('public_player_history_view')
-    .select('*')
-    .eq('username', username)
-
-  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
-  return data ?? []
-}
+// Public leaderboard/player-history reads live in ratingRepository.js
+// (getLeaderboard/getPlayerHistory), not here — this file stays scoped to
+// the authenticated identity's own profile. See rating-projections spec
+// "Public leaderboard and privacy boundary".

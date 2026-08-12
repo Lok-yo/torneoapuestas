@@ -3,13 +3,12 @@
 // "Google authentication and session lifecycle" and design.md sequence
 // diagram (Browser->SupabaseAuth: Google OAuth ->
 // SessionProvider->bootstrap-session: JWT).
-import { supabase, isSupabaseConfigured } from '../lib/supabase.js'
-import { AppError, toAppError } from '../lib/errors.js'
+import { supabase } from '../lib/supabase.js'
+import { toAppError } from '../lib/errors.js'
+import { assertAdapterAvailable } from './adapterAvailability.js'
 
 function assertConfigured() {
-  if (!isSupabaseConfigured) {
-    throw new AppError('UNAVAILABLE', 'El servicio de autenticación no está disponible ahora mismo.')
-  }
+  assertAdapterAvailable('identity', 'El servicio de autenticación no está disponible ahora mismo.')
 }
 
 /**
