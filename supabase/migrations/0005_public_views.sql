@@ -1,14 +1,25 @@
 -- 0005_public_views.sql
 -- Allowlisted public read models. Each view exposes only intentionally
 -- published, non-private fields; private identity, membership, audit,
--- and command-outcome data never appear here. Views run with the
--- querying role's own privileges (security_invoker), and each
--- underlying table's RLS still applies — a view cannot widen access.
--- See platform-foundation spec "Least-privilege data access" and
--- tournament-operations spec "Public projection and closed perimeter".
+-- and command-outcome data never appear here.
+--
+-- These views deliberately run with the VIEW OWNER's privileges (the
+-- Postgres default — no `security_invoker`), the same "bypass RLS, but
+-- only the deliberately curated columns/rows ever leave the function/
+-- view" pattern 0004_rls_policies.sql already uses for every write RPC.
+-- The alternative (`security_invoker = true`) was tried first and
+-- rejected: brackets/matches/results/rating_events/rating_snapshots/
+-- memberships/profiles are all RLS-locked to organizer/participant/
+-- admin, so a `security_invoker` view joining them would make `anon`'s
+-- query fail with a permission error instead of returning the published
+-- projection — silently defeating the very requirement these views
+-- exist to satisfy (tournament-operations spec "Public projection and
+-- closed perimeter"). The security boundary here is each view's own
+-- column allowlist and `where` filter (e.g. `status <> 'DRAFT'`), not
+-- caller privilege — exactly like a SECURITY DEFINER RPC. See
+-- platform-foundation spec "Least-privilege data access".
 
 create view public.public_tournaments_view
-with (security_invoker = true)
 as
 select
   t.id,
@@ -25,7 +36,6 @@ where t.status <> 'DRAFT';
 grant select on public.public_tournaments_view to anon, authenticated;
 
 create view public.public_brackets_view
-with (security_invoker = true)
 as
 select
   m.id as match_id,
@@ -53,7 +63,6 @@ where t.status <> 'DRAFT';
 grant select on public.public_brackets_view to anon, authenticated;
 
 create view public.public_leaderboard_view
-with (security_invoker = true)
 as
 select
   rs.game_id,
@@ -69,7 +78,6 @@ order by rs.game_id, rs.rating desc;
 grant select on public.public_leaderboard_view to anon, authenticated;
 
 create view public.public_player_history_view
-with (security_invoker = true)
 as
 select
   p.username,

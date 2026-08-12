@@ -172,7 +172,10 @@ create policy memberships_select_organizer on public.memberships
 -- ---------------------------------------------------------------------
 -- brackets / matches: readable by the tournament organizer and by
 -- registered participants. No direct client writes — bracket
--- generation only via generate_bracket RPC (0010).
+-- generation only via generate_bracket RPC (0010). Public reads go
+-- through public_brackets_view (0005) only, never these base tables —
+-- see that view's definer-privilege note for why it does not need (and
+-- deliberately does not get) an anon grant here.
 -- ---------------------------------------------------------------------
 
 alter table public.brackets enable row level security;
@@ -219,6 +222,7 @@ create policy matches_select_involved on public.matches
 -- results: organizer/referee for the owning tournament, and the
 -- participants in the match, can read. No direct client writes —
 -- only submit_official_result / correct_result RPCs (0011, 0013).
+-- Public reads go through public_brackets_view (0005) only.
 -- ---------------------------------------------------------------------
 
 alter table public.results enable row level security;

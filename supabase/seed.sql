@@ -1,0 +1,9 @@
+-- seed.sql
+-- Supabase CLI convention: `supabase db reset` runs every migration in
+-- `supabase/migrations/` in order, then this file. Stage 1's approved
+-- game/format catalog (see 0007_ssbu_format_seed.sql) is intentionally a
+-- migration, not a seed fixture, because it must exist in every
+-- environment including production. This file is deliberately empty of
+-- sample tournaments/players/results: local development and tests create
+-- their own fixture rows (see supabase/tests/*.sql) so no throwaway data
+-- ever ships to a real environment through this path.

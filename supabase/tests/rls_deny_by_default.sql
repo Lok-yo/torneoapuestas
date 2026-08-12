@@ -19,7 +19,10 @@ insert into auth.users (id, email) values
 insert into public.profiles (user_id, username, username_normalized, display_name)
 values ('11111111-1111-1111-1111-111111111111', 'rlsowner', 'rlsowner', 'RLS Owner');
 
-insert into public.games (id, name) values ('ssbu', 'Super Smash Bros. Ultimate');
+-- 'ssbu' may already exist via 0007_ssbu_format_seed.sql; this fixture only
+-- needs the row to exist, not to own it.
+insert into public.games (id, name) values ('ssbu', 'Super Smash Bros. Ultimate')
+on conflict (id) do nothing;
 
 insert into public.tournament_formats (id, game_id, name, roster_size, best_of, ruleset)
 values ('33333333-3333-3333-3333-333333333333', 'ssbu', 'Singles', 8, 3, '{}'::jsonb);
