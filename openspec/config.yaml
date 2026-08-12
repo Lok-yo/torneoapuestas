@@ -1,0 +1,66 @@
+schema: spec-driven
+
+project: gg2
+execution_mode: auto
+artifact_store:
+  mode: openspec
+delivery_strategy: single-pr
+review_budget_lines: 1000
+strict_tdd: false
+
+context: |
+  Stack: React 19 SPA using Vite 8, JavaScript/JSX, React Router 7, Zustand 5, Recharts, and Tailwind CSS 4.
+  Architecture: Route-based page components under src/pages, shared UI under src/components, layouts, static data, and persisted Zustand stores.
+  Conventions: ES modules, function components, named stores, feature-oriented folders, and existing Spanish product copy.
+  Testing: No test runner or test files detected; lint and production build are available.
+
+testing:
+  strict_tdd: false
+  runner:
+    available: false
+    command: null
+    framework: null
+  layers:
+    unit: false
+    integration: false
+    e2e: false
+  coverage:
+    available: false
+    command: null
+  quality:
+    linter:
+      available: true
+      command: npm run lint
+      tool: oxlint
+    type_checker:
+      available: false
+      command: null
+    formatter:
+      available: false
+      command: null
+  build_command: npm run build
+
+rules:
+  proposal:
+    - Include a rollback plan for risky changes.
+  specs:
+    - Use Given/When/Then scenarios.
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY).
+  design:
+    - Document architecture decisions with rationale.
+    - Include sequence diagrams for complex flows.
+  tasks:
+    - Group tasks by phase with hierarchical numbering.
+    - Keep tasks completable in one session.
+  apply:
+    guidelines:
+      - Follow existing React, Zustand, and folder conventions.
+    tdd: false
+    test_command: null
+  verify:
+    test_command: null
+    build_command: npm run build
+    lint_command: npm run lint
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas.

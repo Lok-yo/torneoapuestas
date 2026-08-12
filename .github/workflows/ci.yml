@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Fail closed: any job failure blocks merge. Jobs run in dependency order
+# via `needs` so a cheap failure (lint) short-circuits expensive ones (e2e).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install:
+    name: Install (frozen lockfile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies (npm ci, ignore scripts)
+        run: npm ci --ignore-scripts
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ github.sha }}
+
+  lint:
+    name: Lint
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+
+  unit-test:
+    name: Unit tests
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx vitest run --coverage
+
+  db-migrations:
+    name: Supabase migrations, RLS, pgTAP
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Start local Supabase stack
+        run: npx supabase start
+      - name: Replay migrations on a clean database
+        run: npx supabase db reset
+      - name: Run pgTAP suite
+        run: npx supabase test db --local
+      - name: Stop local Supabase stack
+        if: always()
+        run: npx supabase stop
+
+  build:
+    name: Build
+    needs: [lint, unit-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
+
+  e2e:
+    name: Playwright
+    needs: [build, db-migrations]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      # webServer runs `npm run preview`, which serves an already-built
+      # dist/ — build it here with stub (non-secret) credentials so the
+      # OAuth-stub/network-interception specs have a fixed, non-resolving
+      # Supabase origin to intercept. Never real project credentials.
+      - name: Build with stub Supabase credentials for e2e interception
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://e2e-stub.supabase.co
+          VITE_SUPABASE_ANON_KEY: e2e-stub-anon-key
+      - run: npx playwright test
+        env:
+          CI: true
+
+  audit:
+    name: npm audit
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=high

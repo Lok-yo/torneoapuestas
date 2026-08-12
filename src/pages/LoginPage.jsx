@@ -1,21 +1,32 @@
-import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Trophy } from 'lucide-react'
-import { useSessionStore } from '../store/useSessionStore.js'
+import { useSession } from '../auth/SessionProvider.jsx'
+import { toAppError } from '../lib/errors.js'
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const user = useSessionStore((s) => s.user)
-  const loginWithGoogleMock = useSessionStore((s) => s.loginWithGoogleMock)
+  const location = useLocation()
+  const { status, profile, signInWithGoogle } = useSession()
+  const [error, setError] = useState(null)
+  const [pending, setPending] = useState(false)
 
   useEffect(() => {
-    if (user?.username) navigate('/', { replace: true })
-    else if (user && !user.username) navigate('/onboarding', { replace: true })
-  }, [user, navigate])
+    if (status !== 'authenticated') return
+    if (profile?.username) navigate(location.state?.from?.pathname ?? '/', { replace: true })
+    else navigate('/onboarding', { replace: true })
+  }, [status, profile, navigate, location.state])
 
-  const handleGoogleLogin = () => {
-    loginWithGoogleMock()
-    navigate('/onboarding')
+  const handleGoogleLogin = async () => {
+    setPending(true)
+    setError(null)
+    try {
+      await signInWithGoogle()
+      // Browser navigates away for the OAuth redirect; nothing else to do here.
+    } catch (rawError) {
+      setError(toAppError(rawError))
+      setPending(false)
+    }
   }
 
   return (
@@ -23,21 +34,21 @@ export default function LoginPage() {
       <Trophy size={32} className="text-violet-400" />
       <div>
         <h1 className="text-xl font-semibold text-zinc-50">Ingresá a TorneoApuestas</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Organizá y seguí torneos, apostá TCRED en cada partido.
-        </p>
+        <p className="mt-1 text-sm text-zinc-400">Organizá y seguí torneos con tu cuenta de Google.</p>
       </div>
       <button
         type="button"
         onClick={handleGoogleLogin}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-100 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-white"
+        disabled={pending}
+        className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-100 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-white disabled:opacity-60"
       >
-        Continuar con Google
+        {pending ? 'Redirigiendo…' : 'Continuar con Google'}
       </button>
-      <p className="text-xs text-zinc-600">
-        Login simulado para este prototipo — la integración real de Google OAuth se conecta en la
-        próxima etapa (Supabase Auth).
-      </p>
+      {error && (
+        <p className="text-xs text-rose-400">
+          {error.retryable ? 'No pudimos conectar con Google. Probá de nuevo.' : error.message}
+        </p>
+      )}
     </div>
   )
 }
