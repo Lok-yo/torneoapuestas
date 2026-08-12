@@ -4,6 +4,26 @@ import { Trophy } from 'lucide-react'
 import { useSession } from '../auth/SessionProvider.jsx'
 import { toAppError } from '../lib/errors.js'
 
+// Allowlists the post-login return destination to an in-app, same-origin,
+// relative path — never an attacker-forged absolute URL, protocol-
+// relative host, or a redirect back into /login itself (which would
+// loop). `location.state.from` is normally set only by RequireAuth's own
+// <Navigate state={{ from: location }} />, but browser history state can
+// be manipulated by a hostile prior page (e.g. via history.replaceState)
+// or a crafted deep link, so it must never be trusted as-is. See
+// tasks.md 6.4 and design.md threat matrix "Allowlisted same-origin
+// returns prevent loops/open redirects".
+export function resolveSafeRedirectPath(rawPath) {
+  if (typeof rawPath !== 'string' || rawPath.length === 0) return '/'
+  // Reject anything that isn't a plain in-app absolute path: absolute
+  // URLs ("https://evil.com/x"), protocol-relative hosts ("//evil.com"),
+  // and any other scheme (e.g. "javascript:...") all fail this check.
+  if (!rawPath.startsWith('/') || rawPath.startsWith('//') || rawPath.includes('://')) return '/'
+  // Never redirect back into the auth flow itself — avoids a login loop.
+  if (rawPath === '/login' || rawPath.startsWith('/login/') || rawPath.startsWith('/login?')) return '/'
+  return rawPath
+}
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -13,7 +33,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (status !== 'authenticated') return
-    if (profile?.username) navigate(location.state?.from?.pathname ?? '/', { replace: true })
+    if (profile?.username) navigate(resolveSafeRedirectPath(location.state?.from?.pathname), { replace: true })
     else navigate('/onboarding', { replace: true })
   }, [status, profile, navigate, location.state])
 
