@@ -41,7 +41,7 @@ Before deleting a module:
 
 | Module | Consumers today | Replacement | Status |
 |---|---|---|---|
-| `src/store/useSessionStore.js` | `src/components/Navbar.jsx`, `src/pages/HomePage.jsx` | `src/auth/SessionProvider.jsx` (`useSession()`) — already the sole identity source for `LoginPage.jsx`, `OnboardingUsernamePage.jsx`, `RequireAuth.jsx`, `TournamentDetailPage.jsx`'s auth-gated actions (batch 2) | **Known gap, tracked, not fixed in this batch**: `Navbar.jsx` and `HomePage.jsx`'s "Continuar con Google" CTA still read the mock store, so they do not reflect a real signed-in session (a real Google sign-in currently shows the navbar as logged out). This does not create any fabricated identity/financial state — `useSessionStore.loginWithGoogleMock()` is never called from any real code path anymore (only ever set by the old mock login button, which itself was already replaced by `LoginPage.jsx`'s real Google OAuth trigger in batch 2) — but it is a real, user-visible bug in a public page that a follow-up batch should fix by migrating `Navbar.jsx`/`HomePage.jsx` to `useSession()`. |
+| `src/store/useSessionStore.js` | `src/store/useSessionStore.js` (internal helpers) | `src/auth/SessionProvider.jsx` (`useSession()`) | **Migrated & Complete**: `Navbar.jsx` and `HomePage.jsx` were migrated from `useSessionStore` to `useSession()` from `SessionProvider.jsx`. `Navbar.jsx` now renders the authenticated user profile, avatar, role-gated `Panel Organizador` link for organizers/admins, and self-service `Ser Organizador` claim action for authenticated users. `HomePage.jsx` hides the Google login CTA when authenticated. |
 | `src/store/useWalletStore.js` | `src/components/{Navbar,BuySharesPanel}.jsx`, `src/pages/WalletPage.jsx` | None planned (Stage 1 excludes wallets/custody/deposits/withdrawals per proposal.md) | **Isolated behind `FEATURE_FLAGS.demoFinancialUI` as of this batch** (task 5.6): `/wallet` resolves to `NotFoundPage` and the navbar's balance link never renders when the flag is off, which it always is in a production build (`resolveDemoFinancialUIFlag` hard-forces it off whenever `import.meta.env.PROD` is true, regardless of any env override). The store itself, and every component that reads it, are unchanged — only their reachability changed. No balances, positions, or transactions this store manages were ever real financial state (`STARTING_BALANCE = 1000` simulated TCRED, `persist`-ed to `localStorage` only). |
 
 ## Prediction / market UI
@@ -99,12 +99,7 @@ still isn't one, and there still doesn't need to be one — see below):
   future stage adds a genuine fixture/staging adapter for one of these
   domains, that adapter — not this flag mechanism — is the missing piece.
 
-## Known deferred work (still not done)
+## Known deferred work (resolved)
 
-- The `Navbar.jsx`/`HomePage.jsx` mock-session-store gap (see the mock
-  stores table above): `Navbar.jsx`/`HomePage.jsx`'s "Continuar con
-  Google" CTA still read the legacy mock `useSessionStore` instead of
-  `useSession()`, so a real Google sign-in leaves the navbar looking
-  logged out. Non-blocking cosmetic gap (no fabricated identity/financial
-  state), flagged again for a follow-up batch.
-- `src/lib/prediction.js` was not audited for consumers in this batch.
+- The `Navbar.jsx`/`HomePage.jsx` mock-session-store gap: RESOLVED. `Navbar.jsx` and `HomePage.jsx` now read `useSession()` from `SessionProvider.jsx`.
+- `src/lib/prediction.js` audit: Completed (task 7.3). Gated behind `FEATURE_FLAGS.demoFinancialUI`.

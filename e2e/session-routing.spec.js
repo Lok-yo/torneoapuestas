@@ -66,31 +66,23 @@ test.describe('Routing threat matrix: token refresh/expiry mid-session', () => {
     page,
   }) => {
     await stubAuthUser(page)
-    await stubBootstrapSession(page)
+    await stubBootstrapSession(page, { username: 'organizador_expirado', roles: ['user', 'organizer'] })
+    await stubEmptyOrganizerTournaments(page)
 
-    // Establish a real, valid session on a real protected route first —
-    // this persists a real supabase-js session to localStorage under
-    // whatever storage key the client actually uses (we never hardcode
-    // that key name; we discover it below).
-    await page.goto('/wallet' + stubAccessTokenHash())
+    await page.goto('/organizador' + stubAccessTokenHash())
+    await page.waitForFunction(() => Object.keys(localStorage).some((k) => k.includes('auth-token')))
     await expect(page).not.toHaveURL(/\/login$/)
 
     // Simulate the token having expired mid-session: rewrite the
-    // *actually persisted* session's expiry to the past, so the next
-    // getSession() call (on reload) detects it as expired and attempts a
-    // real refresh — exactly what happens when a real access token
-    // expires while the tab stays open.
+    // *actually persisted* session's expiry to the past.
     await page.evaluate(() => {
       const key = Object.keys(localStorage).find((k) => k.includes('auth-token'))
-      if (!key) throw new Error('no persisted supabase auth session found to expire')
       const raw = JSON.parse(localStorage.getItem(key))
-      const target = raw.currentSession ?? raw // support both storage shapes
-      target.expires_at = Math.floor(Date.now() / 1000) - 10
+      raw.expires_at = Math.floor(Date.now() / 1000) - 100
       localStorage.setItem(key, JSON.stringify(raw))
     })
 
-    // The refresh attempt itself fails (expired/invalid refresh token) —
-    // the real-world case this scenario models.
+    // The refresh attempt itself fails (expired/invalid refresh token).
     await page.route('**/auth/v1/token?grant_type=refresh_token', (route) =>
       route.fulfill({
         status: 400,
@@ -101,8 +93,7 @@ test.describe('Routing threat matrix: token refresh/expiry mid-session', () => {
 
     await page.reload()
 
-    // Denied protected command: redirected to /login, never left showing
-    // stale protected content from before the expiry.
+    // Denied protected command: redirected to /login.
     await expect(page).toHaveURL(/\/login$/)
   })
 })

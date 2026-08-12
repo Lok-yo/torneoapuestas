@@ -115,16 +115,16 @@ test.describe('Authenticated identity: OAuth-stub sign-in and onboarding', () =>
   test('a successful claim leaves onboarding and reaches a protected route', async ({ page }) => {
     await stubAuthUser(page)
     let claimed = false
-    await page.route('**/functions/v1/bootstrap-session', (route) =>
-      route.fulfill({
+    await page.route('**/functions/v1/bootstrap-session', async (route) => {
+      await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          profile: { user_id: FAKE_USER_ID, username: claimed ? 'jugador_libre' : null },
+          profile: { user_id: FAKE_USER_ID, username: claimed ? 'jugador_libre' : null, display_name: null, avatar_url: null },
           roles: ['user'],
         }),
-      }),
-    )
+      })
+    })
     await stubClaimUsername(page, (username) => {
       claimed = true
       return { status: 'claimed', username, usernameNormalized: username.toLowerCase() }

@@ -2,18 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import { GAMES } from '../data/games.js'
-import { topMarketsByVolume } from '../data/markets.js'
-import { useSessionStore } from '../store/useSessionStore.js'
+import { useSession } from '../auth/SessionProvider.jsx'
 import { listTournaments } from '../repositories/tournamentRepository.js'
-import { FEATURE_FLAGS } from '../config/featureFlags.js'
-import MarketCard from '../components/MarketCard.jsx'
 import GameTag from '../components/GameTag.jsx'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
+import LiveBetTicker from '../components/LiveBetTicker.jsx'
 
 export default function HomePage() {
-  const user = useSessionStore((s) => s.user)
+  const { status, profile } = useSession()
+  const isAuthenticated = status === 'authenticated' && Boolean(profile?.username)
   const [featuredState, setFeaturedState] = useState({ status: 'loading', tournaments: [] })
-  const topMarkets = FEATURE_FLAGS.demoFinancialUI ? topMarketsByVolume(4) : []
 
   useEffect(() => {
     let cancelled = false
@@ -31,36 +29,36 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-14">
-      <section className="flex flex-col items-start gap-4 rounded-3xl border border-zinc-800 bg-gradient-to-br from-violet-500/10 via-zinc-900 to-zinc-950 p-8 sm:p-12">
+      <section className="flex flex-col items-start gap-4 rounded-3xl border border-zinc-800 bg-gradient-to-br from-violet-500/10 via-zinc-900 to-zinc-950 p-8 sm:p-12 shadow-2xl">
         <span className="rounded-full border border-violet-500/40 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-300">
           Torneos competitivos
         </span>
         <h1 className="max-w-2xl text-3xl font-bold text-zinc-50 sm:text-5xl">
-          Organizá torneos de lucha y seguí el ranking oficial
+          Organiza torneos de lucha y sigue el ranking oficial
         </h1>
         <p className="max-w-xl text-zinc-400">
           Smash Ultimate, Melee, Street Fighter 6, Fatal Fury: City of the Wolves, Tekken 8 y Rivals
           of Aether II. Registro, brackets, resultados oficiales y rating por jugador.
-          {FEATURE_FLAGS.demoFinancialUI &&
-            ' (Demo local: también incluye mercados de predicción simulados con TCRED, un crédito sin valor real.)'}
         </p>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3 pt-2">
           <Link
             to="/torneos"
-            className="inline-flex items-center gap-2 rounded-lg bg-zinc-100 px-5 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-white"
+            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold !text-white shadow-lg shadow-violet-500/25 hover:bg-violet-500 transition"
           >
             Ver torneos <ArrowRight size={16} />
           </Link>
-          {!user?.username && (
+          {!isAuthenticated && (
             <Link
               to="/login"
-              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-5 py-2.5 text-sm font-semibold text-zinc-200 hover:border-zinc-500"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900/80 px-5 py-2.5 text-sm font-semibold !text-zinc-200 hover:border-zinc-500 hover:bg-zinc-800 transition"
             >
               Continuar con Google
             </Link>
           )}
         </div>
       </section>
+
+      <LiveBetTicker />
 
       <section>
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500">Juegos</h2>
@@ -114,22 +112,6 @@ export default function HomePage() {
           </div>
         )}
       </section>
-
-      {/* Legacy demo-only prediction-market UI (simulated TCRED, never real
-          financial state). Unreachable outside FEATURE_FLAGS.demoFinancialUI,
-          which is hard-forced off in every production build. See tasks.md
-          5.6 and legacy-migration-controls spec "Legacy identity and
-          financial isolation". */}
-      {FEATURE_FLAGS.demoFinancialUI && (
-        <section>
-          <h2 className="mb-4 text-lg font-semibold text-zinc-100">Mercados con más volumen</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {topMarkets.map((m) => (
-              <MarketCard key={m.id} market={m} />
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   )
 }

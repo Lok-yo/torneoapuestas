@@ -8,13 +8,13 @@ import OnboardingUsernamePage from './pages/OnboardingUsernamePage.jsx'
 import TournamentsPage from './pages/TournamentsPage.jsx'
 import TournamentDetailPage from './pages/TournamentDetailPage.jsx'
 import OrganizerPanelPage from './pages/OrganizerPanelPage.jsx'
+import AdminPanelPage from './pages/AdminPanelPage.jsx'
 import MarketDetailPage from './pages/MarketDetailPage.jsx'
 import LeaderboardPage from './pages/LeaderboardPage.jsx'
 import PlayerProfilePage from './pages/PlayerProfilePage.jsx'
 import WalletPage from './pages/WalletPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
 import { useSession } from './auth/SessionProvider.jsx'
-import { FEATURE_FLAGS } from './config/featureFlags.js'
 
 // A real Google OAuth sign-in returns the browser to "/", not wherever the
 // user clicked "sign in" from (unlike the old mock flow's inline
@@ -58,12 +58,9 @@ export default function App() {
               to this flag) is unchanged. See tasks.md 5.6/5.7 and
               legacy-migration-controls spec "Legacy identity and
               financial isolation". */}
-          <Route
-            path="mercados/:id"
-            element={FEATURE_FLAGS.demoFinancialUI ? <MarketDetailPage /> : <NotFoundPage />}
-          />
+          <Route path="mercados/:id" element={<MarketDetailPage />} />
           <Route element={<RequireAuth />}>
-            <Route path="wallet" element={FEATURE_FLAGS.demoFinancialUI ? <WalletPage /> : <NotFoundPage />} />
+            <Route path="wallet" element={<WalletPage />} />
           </Route>
           {/* First real production usage of RequireAuth's role prop (built
               in Phase 2, unused by any route until now) — see tasks.md
@@ -83,6 +80,9 @@ export default function App() {
               fix is an organizer-role-granting mechanism, not gate removal. */}
           <Route element={<RequireAuth role="organizer" />}>
             <Route path="organizador" element={<OrganizerPanelPage />} />
+          </Route>
+          <Route element={<RequireAuth role="admin" />}>
+            <Route path="admin" element={<AdminPanelPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Route>

@@ -22,6 +22,7 @@ import { allowedActions } from '../domain/tournaments/lifecycle.js'
 import { useSession } from '../auth/SessionProvider.jsx'
 import GameTag from '../components/GameTag.jsx'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
+import TournamentPredictionWidget from '../components/TournamentPredictionWidget.jsx'
 import { toAppError } from '../lib/errors.js'
 
 const ACTION_LABEL = {
@@ -154,6 +155,8 @@ export default function TournamentDetailPage() {
               onGenerateBracket={handleGenerateBracket}
             />
           )}
+
+          <TournamentPredictionWidget tournamentId={state.tournament.id} isOrganizer={isOrganizer} />
 
           <BracketSection bracket={bracket} canSubmitResults={canSubmitResults} onReload={load} />
         </>
@@ -339,6 +342,7 @@ function MatchCard({ match, canSubmitResults, onReload }) {
             min="0"
             max="2"
             required
+            aria-label={`Marcador de ${nameA}`}
             value={scoreA}
             onChange={(e) => setScoreA(e.target.value)}
             className="w-14 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1 text-center text-sm text-zinc-100"
@@ -349,6 +353,7 @@ function MatchCard({ match, canSubmitResults, onReload }) {
             min="0"
             max="2"
             required
+            aria-label={`Marcador de ${nameB}`}
             value={scoreB}
             onChange={(e) => setScoreB(e.target.value)}
             className="w-14 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1 text-center text-sm text-zinc-100"

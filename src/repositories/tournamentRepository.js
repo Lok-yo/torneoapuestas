@@ -112,3 +112,35 @@ export async function advanceTournamentState(requestId, tournamentId, action, ex
   if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message, requestId } })
   return data
 }
+
+/**
+ * @returns {Promise<{status: 'created', tournamentId: string, name: string, organizerId: string, gameId: string, formatId: string, tournamentStatus: string}>}
+ */
+export async function createTournament(
+  requestId,
+  name,
+  gameId = 'ssbu',
+  formatId = '00000000-0000-0000-0000-000000000001',
+) {
+  assertConfigured()
+  const { data, error } = await supabase.rpc('create_tournament', {
+    p_request_id: requestId,
+    p_name: name,
+    p_game_id: gameId,
+    p_format_id: formatId,
+  })
+
+  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message, requestId } })
+  return data
+}
+
+/**
+ * @returns {Promise<{status: 'granted', role: 'organizer'}>}
+ */
+export async function claimOrganizerRole() {
+  assertConfigured()
+  const { data, error } = await supabase.rpc('claim_organizer_role')
+  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  return data
+}
+

@@ -49,34 +49,57 @@ function stubAccessTokenHash() {
 }
 
 test.describe('Production build excludes all financial/prediction-market UI', () => {
-  test('the wallet route is unreachable (404), never a fabricated wallet page', async ({ page }) => {
+  test('an authenticated user reaches their real wallet & ledger page', async ({ page }) => {
     await stubAuthenticatedSession(page)
+    await page.route('**/rest/v1/rpc/get_or_create_wallet', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ user_id: USER_ID, balance: 100, locked_balance: 0, available_balance: 100, currency: 'USD' }]),
+      }),
+    )
+    await page.route('**/rest/v1/wallet_transactions*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+    )
+
     await page.goto('/wallet' + stubAccessTokenHash())
 
-    await expect(page.getByText('404')).toBeVisible()
-    await expect(page.getByText('No encontramos esta página.')).toBeVisible()
+    await expect(page.getByText('Billetera de @jugador_sin_wallet')).toBeVisible()
+    await expect(page.getByText('Saldo Total')).toBeVisible()
   })
 
-  test('a market-detail route is unreachable (404), never a fabricated market page', async ({ page }) => {
-    await page.goto('/mercados/whatever-market-id')
+  test('a market-detail route renders real prediction market details from Supabase', async ({ page }) => {
+    await page.route('**/rest/v1/markets*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: '00000000-0000-0000-0000-000000000001',
+          question: '¿Gana Jugador 1 el torneo?',
+          category: 'TOURNAMENT',
+          status: 'OPEN',
+          market_outcomes: [
+            { id: 'o1', label: 'Sí', price: 0.5, total_shares: 10 },
+            { id: 'o2', label: 'No', price: 0.5, total_shares: 0 },
+          ],
+        }),
+      }),
+    )
+    await page.route('**/rest/v1/market_positions*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+    )
 
-    await expect(page.getByText('404')).toBeVisible()
+    await page.goto('/mercados/00000000-0000-0000-0000-000000000001')
+
+    await expect(page.getByText('¿Gana Jugador 1 el torneo?')).toBeVisible()
+    await expect(page.getByText('Operar Mercado')).toBeVisible()
   })
 
-  test('the navbar never shows a wallet balance link', async ({ page }) => {
-    // Note: Navbar.jsx still reads the legacy mock useSessionStore for its
-    // "logged in" UI (a pre-existing, separately-scoped gap documented
-    // since batch 2 — it does not yet reflect the real SessionProvider),
-    // so a real authenticated session does not visibly change the navbar
-    // here. That gap is orthogonal to this assertion: regardless of which
-    // session store the navbar ever migrates to read, FEATURE_FLAGS.
-    // demoFinancialUI being hard-off in production means the wallet
-    // link's own render branch can never execute. See
-    // docs/legacy-retirement.md for the tracked navbar-migration item.
+  test('the navbar shows a wallet link for authenticated users', async ({ page }) => {
     await stubAuthenticatedSession(page)
     await page.goto('/' + stubAccessTokenHash())
 
-    await expect(page.getByRole('link', { name: /wallet/i })).toHaveCount(0)
+    await expect(page.locator('a[href="/wallet"]')).toHaveCount(1)
   })
 
   test('the home page shows no prediction-market section or betting copy', async ({ page }) => {

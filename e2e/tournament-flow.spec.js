@@ -228,4 +228,56 @@ test.describe('Tournament operations: registration -> freeze -> bracket -> offic
     // Never a fabricated tournament name/status while the dependency is down.
     await expect(page.getByText('E2E Showdown')).not.toBeVisible()
   })
+
+  test('an authenticated organizer creates a tournament from zero on /organizador', async ({ page }) => {
+    let tournaments = []
+    await stubOrganizerSession(page)
+
+    await page.route('**/rest/v1/tournaments*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(tournaments) }),
+    )
+
+    await page.route('**/rest/v1/rpc/create_tournament', async (route) => {
+      const body = route.request().postDataJSON()
+      const newT = {
+        id: 'b9000000-0000-0000-0000-000000000099',
+        organizer_id: ORGANIZER_ID,
+        game_id: body.p_game_id ?? 'ssbu',
+        format_id: body.p_format_id ?? FORMAT_ID,
+        name: body.p_name,
+        status: 'DRAFT',
+        version: 1,
+        roster_frozen_at: null,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      }
+      tournaments = [newT]
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'created',
+          tournamentId: newT.id,
+          name: newT.name,
+          organizerId: newT.organizer_id,
+          gameId: newT.game_id,
+          formatId: newT.format_id,
+          tournamentStatus: newT.status,
+        }),
+      })
+    })
+
+    await page.goto('/organizador' + stubAccessTokenHash())
+
+    await expect(page.getByText('Panel de organizador')).toBeVisible()
+    await expect(page.getByText('No organizás ningún torneo todavía.')).toBeVisible()
+
+    const nameInput = page.getByPlaceholder('Nombre del torneo')
+    await nameInput.fill('Torneo Creado Desde Cero')
+    await page.getByRole('button', { name: 'Crear torneo' }).click()
+
+    await expect(page.getByText('Torneo Creado Desde Cero')).toBeVisible()
+    await expect(page.getByText('DRAFT')).toBeVisible()
+  })
 })
+
