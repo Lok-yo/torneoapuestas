@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import { GAMES } from '../data/games.js'
@@ -7,25 +6,13 @@ import { listTournaments } from '../repositories/tournamentRepository.js'
 import GameTag from '../components/GameTag.jsx'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
 import LiveBetTicker from '../components/LiveBetTicker.jsx'
+import { useAsync } from '../lib/useAsync.js'
 
 export default function HomePage() {
   const { status, profile } = useSession()
   const isAuthenticated = status === 'authenticated' && Boolean(profile?.username)
-  const [featuredState, setFeaturedState] = useState({ status: 'loading', tournaments: [] })
-
-  useEffect(() => {
-    let cancelled = false
-    listTournaments()
-      .then((tournaments) => {
-        if (!cancelled) setFeaturedState({ status: 'ready', tournaments: tournaments.slice(0, 3) })
-      })
-      .catch(() => {
-        if (!cancelled) setFeaturedState({ status: 'error', tournaments: [] })
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const { status: featuredStatus, data: allTournaments } = useAsync(() => listTournaments(), [])
+  const featuredTournaments = allTournaments?.slice(0, 3) ?? []
 
   return (
     <div className="flex flex-col gap-14">
@@ -79,21 +66,21 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {featuredState.status === 'loading' && (
+        {featuredStatus === 'loading' && (
           <p className="py-6 text-center text-sm text-zinc-500">Cargando torneos…</p>
         )}
 
-        {featuredState.status === 'error' && (
+        {featuredStatus === 'error' && (
           <p className="py-6 text-center text-sm text-rose-400">No pudimos cargar los torneos destacados ahora mismo.</p>
         )}
 
-        {featuredState.status === 'ready' && featuredState.tournaments.length === 0 && (
+        {featuredStatus === 'ready' && featuredTournaments.length === 0 && (
           <p className="py-6 text-center text-sm text-zinc-500">Todavía no hay torneos publicados.</p>
         )}
 
-        {featuredState.status === 'ready' && featuredState.tournaments.length > 0 && (
+        {featuredStatus === 'ready' && featuredTournaments.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {featuredState.tournaments.map((t) => {
+            {featuredTournaments.map((t) => {
               const game = GAMES.find((g) => g.id === t.game_id)
               return (
                 <Link

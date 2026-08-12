@@ -216,7 +216,7 @@ BEGIN
   WHERE id = p_outcome_id;
 
   -- Simple CPMM-style price adjustment for binary outcomes
-  SELECT * INTO v_other_outcome FROM public.market_outcomes WHERE market_id = p_market_id AND id != p_outcome_id LIMIT 1;
+  SELECT * INTO v_other_outcome FROM public.market_outcomes WHERE market_id = p_market_id AND id != p_outcome_id LIMIT 1 FOR UPDATE;
   IF FOUND THEN
     v_new_price := round(least(0.9500, greatest(0.0500, v_outcome.price + (p_shares * 0.0050))), 4);
     v_other_price := 1.0000 - v_new_price;

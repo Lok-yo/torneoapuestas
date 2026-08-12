@@ -12,7 +12,6 @@
 // guessing/redirecting, this page shows the same truthful empty state
 // either way; it never fabricates a "not found" verdict it cannot back
 // with real profile data.
-import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { getPlayerRatings, getPlayerHistory } from '../repositories/ratingRepository.js'
 import { getGameById } from '../data/games.js'
@@ -20,40 +19,30 @@ import Avatar from '../components/Avatar.jsx'
 import TierBadge from '../components/TierBadge.jsx'
 import GameTag from '../components/GameTag.jsx'
 import { formatDateTime } from '../lib/format.js'
-import { toAppError } from '../lib/errors.js'
+import { useAsync } from '../lib/useAsync.js'
 
 export default function PlayerProfilePage() {
   const { username } = useParams()
-  const [state, setState] = useState({ status: 'loading', ratings: [], history: [], error: null })
+  const { status, data, error } = useAsync(
+    () => Promise.all([getPlayerRatings(username), getPlayerHistory(username)]),
+    [username],
+  )
+  const ratings = data?.[0] ?? []
+  const history = data?.[1] ?? []
 
-  useEffect(() => {
-    let cancelled = false
-    setState({ status: 'loading', ratings: [], history: [], error: null })
-    Promise.all([getPlayerRatings(username), getPlayerHistory(username)])
-      .then(([ratings, history]) => {
-        if (!cancelled) setState({ status: 'ready', ratings, history, error: null })
-      })
-      .catch((rawError) => {
-        if (!cancelled) setState({ status: 'error', ratings: [], history: [], error: toAppError(rawError) })
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [username])
-
-  if (state.status === 'loading') {
+  if (status === 'loading') {
     return <p className="py-12 text-center text-sm text-zinc-500">Cargando perfil…</p>
   }
 
-  if (state.status === 'error') {
+  if (status === 'error') {
     return (
       <p className="py-12 text-center text-sm text-rose-400">
-        No pudimos cargar este perfil ahora mismo. {state.error?.message}
+        No pudimos cargar este perfil ahora mismo. {error?.message}
       </p>
     )
   }
 
-  const bestRating = state.ratings.length > 0 ? Math.max(...state.ratings.map((r) => r.rating)) : 0
+  const bestRating = ratings.length > 0 ? Math.max(...ratings.map((r) => r.rating)) : 0
 
   return (
     <div className="flex flex-col gap-8">
@@ -61,7 +50,7 @@ export default function PlayerProfilePage() {
         <Avatar username={username} size={64} />
         <div>
           <h1 className="text-xl font-semibold text-zinc-50">@{username}</h1>
-          {state.ratings.length > 0 ? (
+          {ratings.length > 0 ? (
             <div className="mt-2 flex items-center gap-2">
               <TierBadge rating={bestRating} />
               <span className="text-xs text-zinc-500">Mejor rating entre sus juegos</span>
@@ -72,13 +61,13 @@ export default function PlayerProfilePage() {
         </div>
       </div>
 
-      {state.ratings.length > 0 && (
+      {ratings.length > 0 && (
         <div>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">
             Rating por juego
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            {state.ratings.map((r) => {
+            {ratings.map((r) => {
               const game = getGameById(r.game_id)
               return (
                 <div
@@ -104,7 +93,7 @@ export default function PlayerProfilePage() {
         </div>
       )}
 
-      {state.history.length > 0 && (
+      {history.length > 0 && (
         <div>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">
             Historial de resultados
@@ -120,7 +109,7 @@ export default function PlayerProfilePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
-                {state.history.map((h, i) => (
+                {history.map((h, i) => (
                   <tr key={`${h.game_id}-${h.effective_at}-${i}`}>
                     <td className="px-4 py-3 text-zinc-400">{formatDateTime(h.effective_at)}</td>
                     <td className="px-4 py-3 text-zinc-300">{getGameById(h.game_id)?.shortName ?? h.game_id}</td>

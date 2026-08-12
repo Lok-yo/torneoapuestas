@@ -3,34 +3,19 @@
 // which is derived strictly from accepted official results — never
 // simulated/predicted. See tasks.md 4.7/4.9 and rating-projections spec
 // "Public leaderboard and privacy boundary".
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getLeaderboard } from '../repositories/ratingRepository.js'
 import { getGameById } from '../data/games.js'
 import GameTabs from '../components/GameTabs.jsx'
 import Avatar from '../components/Avatar.jsx'
 import TierBadge from '../components/TierBadge.jsx'
-import { toAppError } from '../lib/errors.js'
 import { formatDate } from '../lib/format.js'
+import { useAsync } from '../lib/useAsync.js'
 
 export default function LeaderboardPage() {
   const [gameId, setGameId] = useState(null)
-  const [state, setState] = useState({ status: 'loading', rows: [], error: null })
-
-  useEffect(() => {
-    let cancelled = false
-    setState({ status: 'loading', rows: [], error: null })
-    getLeaderboard(gameId)
-      .then((rows) => {
-        if (!cancelled) setState({ status: 'ready', rows, error: null })
-      })
-      .catch((rawError) => {
-        if (!cancelled) setState({ status: 'error', rows: [], error: toAppError(rawError) })
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [gameId])
+  const { status, data: rows, error } = useAsync(() => getLeaderboard(gameId), [gameId])
 
   return (
     <div className="flex flex-col gap-6">
@@ -42,23 +27,23 @@ export default function LeaderboardPage() {
       </div>
       <GameTabs activeId={gameId} onChange={setGameId} />
 
-      {state.status === 'loading' && (
+      {status === 'loading' && (
         <p className="py-12 text-center text-sm text-zinc-500">Cargando ranking…</p>
       )}
 
-      {state.status === 'error' && (
+      {status === 'error' && (
         <p className="py-12 text-center text-sm text-rose-400">
-          No pudimos cargar el ranking ahora mismo. {state.error?.message}
+          No pudimos cargar el ranking ahora mismo. {error?.message}
         </p>
       )}
 
-      {state.status === 'ready' && state.rows.length === 0 && (
+      {status === 'ready' && (rows ?? []).length === 0 && (
         <p className="py-12 text-center text-sm text-zinc-500">
           Todavía no hay resultados oficiales que generen ranking.
         </p>
       )}
 
-      {state.status === 'ready' && state.rows.length > 0 && (
+      {status === 'ready' && (rows ?? []).length > 0 && (
         <div className="overflow-x-auto rounded-2xl border border-zinc-800">
           <table className="w-full text-sm">
             <thead className="bg-zinc-900/80 text-left text-xs uppercase tracking-wide text-zinc-500">
@@ -72,7 +57,7 @@ export default function LeaderboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">
-              {state.rows.map((row, i) => {
+              {(rows ?? []).map((row, i) => {
                 const game = getGameById(row.game_id)
                 return (
                   <tr key={`${row.game_id}-${row.username}`} className="transition hover:bg-zinc-900/60">
