@@ -8,7 +8,7 @@ INSERT INTO auth.users (id, email) VALUES
 
 -- 1. Get or create wallet grants welcome bonus
 SET LOCAL row_security = on;
-SET LOCAL "request.jwt.claims" TO '{"sub": "e7000000-0000-0000-0000-000000000001", "role": "authenticated"}';
+SET LOCAL "request.jwt.claims" TO '{"sub": "e7000000-0000-0000-0000-000000000001", "role": "authenticated"}'; SET LOCAL "request.jwt.claim.sub" TO 'e7000000-0000-0000-0000-000000000001';
 
 SELECT results_eq(
   'SELECT balance, locked_balance, available_balance FROM public.get_or_create_wallet()',
@@ -47,7 +47,7 @@ SELECT throws_ok(
 
 -- 6. RLS: User 2 cannot see User 1 transactions
 SET LOCAL role authenticated;
-SET LOCAL "request.jwt.claims" TO '{"sub": "e7000000-0000-0000-0000-000000000002", "role": "authenticated"}';
+SET LOCAL "request.jwt.claims" TO '{"sub": "e7000000-0000-0000-0000-000000000002", "role": "authenticated"}'; SET LOCAL "request.jwt.claim.sub" TO 'e7000000-0000-0000-0000-000000000002';
 SELECT public.get_or_create_wallet();
 
 SELECT is_empty(

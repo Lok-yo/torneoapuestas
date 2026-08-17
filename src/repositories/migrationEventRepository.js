@@ -22,8 +22,12 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase.js'
  * @param {MigrationEventType} eventType
  * @param {MigrationAdapter} adapter
  * @param {Record<string, unknown>} [detail]
+ * @param {string} [requestId] Idempotency key — replays of the same
+ *   migration step (retry after interruption) are recorded at most
+ *   once server-side (0021_verify_remediation.sql). Generated fresh per
+ *   logical step when omitted.
  */
-export async function recordMigrationEvent(eventType, adapter, detail = {}) {
+export async function recordMigrationEvent(eventType, adapter, detail = {}, requestId) {
   // No Supabase configuration at all means there is nowhere to write the
   // audit row either — this is the same truthful-unavailable boundary
   // every repository's assertConfigured() already reports; recording a
@@ -36,6 +40,7 @@ export async function recordMigrationEvent(eventType, adapter, detail = {}) {
       p_event_type: eventType,
       p_adapter: adapter,
       p_detail: detail,
+      p_request_id: requestId ?? crypto.randomUUID(),
     })
   } catch {
     // Best-effort only — never let an audit-write failure surface as a

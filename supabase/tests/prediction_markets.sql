@@ -14,7 +14,7 @@ ON CONFLICT (user_id, role) DO NOTHING;
 
 -- 1. Organizer creates market with binary outcomes
 SET LOCAL role authenticated;
-SET LOCAL "request.jwt.claims" TO '{"sub": "d7000000-0000-0000-0000-000000000001", "role": "authenticated"}';
+SET LOCAL "request.jwt.claims" TO '{"sub": "d7000000-0000-0000-0000-000000000001", "role": "authenticated"}'; SET LOCAL "request.jwt.claim.sub" TO 'd7000000-0000-0000-0000-000000000001';
 
 SELECT is(
   (SELECT status FROM public.create_prediction_market(NULL, '¿Gana Jugador 1 el torneo?')),
@@ -31,7 +31,7 @@ SELECT is(
 
 -- 3. Bettor buys shares (SÍ option)
 SET LOCAL role authenticated;
-SET LOCAL "request.jwt.claims" TO '{"sub": "d7000000-0000-0000-0000-000000000002", "role": "authenticated"}';
+SET LOCAL "request.jwt.claims" TO '{"sub": "d7000000-0000-0000-0000-000000000002", "role": "authenticated"}'; SET LOCAL "request.jwt.claim.sub" TO 'd7000000-0000-0000-0000-000000000002';
 
 SELECT is(
   (SELECT total_cost FROM public.buy_market_shares(
@@ -63,7 +63,7 @@ SELECT throws_ok(
 );
 
 -- 6. Organizer resolves market paying out $1.00 per share ($10.00 total)
-SET LOCAL "request.jwt.claims" TO '{"sub": "d7000000-0000-0000-0000-000000000001", "role": "authenticated"}';
+SET LOCAL "request.jwt.claims" TO '{"sub": "d7000000-0000-0000-0000-000000000001", "role": "authenticated"}'; SET LOCAL "request.jwt.claim.sub" TO 'd7000000-0000-0000-0000-000000000001';
 
 SELECT is(
   (SELECT total_payout FROM public.resolve_market(
