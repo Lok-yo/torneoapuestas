@@ -6,11 +6,12 @@
 // via supabase/migrations/0020_wallet_and_onchain_cache.sql's
 // link_wallet RPC (PK + UNIQUE constraints). NEVER required for trading
 // — see spec "No Required GG2 Account for Trading".
-import { supabase } from '../lib/supabase.js'
+import { supabase, isSupabaseConfigured } from '../lib/supabase.js'
 import { toAppError } from '../lib/errors.js'
 
 /** @returns {Promise<{user_id: string, address: string}|null>} */
 export async function getMyWalletLink() {
+  if (!isSupabaseConfigured) return null
   const { data, error } = await supabase.from('wallet_links').select('user_id, address, chain_id, linked_at').maybeSingle()
   if (error) throw toAppError(error)
   return data ?? null

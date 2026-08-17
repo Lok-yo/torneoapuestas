@@ -20,7 +20,7 @@ export default function HomePage() {
       <section className="flex flex-col items-start gap-4 rounded-3xl border border-zinc-800 bg-gradient-to-br from-violet-500/10 via-zinc-900 to-zinc-950 p-8 sm:p-12 shadow-2xl">
         <div className="flex flex-wrap gap-2">
           <span className="rounded-full border border-violet-500/40 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-300">
-            Torneos FGC & Mercados P2P
+            {FEATURE_FLAGS.web3 ? 'Torneos FGC & Mercados P2P' : 'Torneos competitivos'}
           </span>
           {FEATURE_FLAGS.web3 && (
             <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
@@ -29,10 +29,14 @@ export default function HomePage() {
           )}
         </div>
         <h1 className="max-w-2xl text-3xl font-bold text-zinc-50 sm:text-5xl">
-          Torneos de Fighting Games y Mercados de Predicción P2P
+          {FEATURE_FLAGS.web3
+            ? 'Torneos de Fighting Games y Mercados P2P'
+            : 'Organiza torneos de lucha y sigue el ranking oficial'}
         </h1>
         <p className="max-w-xl text-zinc-400">
-          Sigue torneos reales, rankings de jugadores y participa en mercados de predicción descentralizados en Polygon con USDC.
+          {FEATURE_FLAGS.web3
+            ? 'Sigue torneos reales, rankings de jugadores y participa en mercados descentralizados en Polygon con USDC.'
+            : 'Smash Ultimate, Melee, Street Fighter 6, Fatal Fury: City of the Wolves, Tekken 8 y Rivals of Aether II. Registro, brackets, resultados oficiales y rating por jugador.'}
         </p>
         <div className="flex flex-wrap gap-3 pt-2">
           <Link
@@ -40,12 +44,6 @@ export default function HomePage() {
             className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold !text-white shadow-lg shadow-violet-500/25 hover:bg-violet-500 transition"
           >
             Ver torneos <ArrowRight size={16} />
-          </Link>
-          <Link
-            to="/wallet"
-            className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900/80 px-5 py-2.5 text-sm font-semibold !text-zinc-200 hover:border-zinc-500 hover:bg-zinc-800 transition"
-          >
-            <Wallet size={16} className="text-emerald-400" /> Billetera
           </Link>
           {FEATURE_FLAGS.web3 && (
             <Link
