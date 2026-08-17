@@ -200,7 +200,7 @@ test.describe('Routing threat matrix: forged/stale role claim is denied server-s
     )
 
     await page.goto('/organizador' + stubAccessTokenHash())
-    await expect(page.getByText('Torneo con reclamo de rol forjado')).toBeVisible()
+    await expect(page.getByRole('listitem').getByText('Torneo con reclamo de rol forjado')).toBeVisible()
 
     await page.getByRole('button', { name: 'Cerrar inscripciones' }).click()
 
