@@ -102,10 +102,10 @@ export default function PlayerProfilePage() {
             <table className="w-full text-sm">
               <thead className="bg-zinc-900/80 text-left text-xs uppercase tracking-wide text-zinc-500">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Fecha</th>
-                  <th className="px-4 py-3 font-medium">Juego</th>
-                  <th className="px-4 py-3 text-right font-medium">Cambio</th>
-                  <th className="px-4 py-3 font-medium">Estado</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Fecha</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Juego</th>
+                  <th scope="col" className="px-4 py-3 text-right font-medium">Cambio</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">

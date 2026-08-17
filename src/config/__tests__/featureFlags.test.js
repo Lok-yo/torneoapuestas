@@ -8,7 +8,7 @@
 // spec "Explicit source-of-truth boundary" / "Staged, environment-scoped
 // rollout".
 import { describe, it, expect } from 'vitest'
-import { resolveDemoFinancialUIFlag, resolveAdapterFlag, FEATURE_FLAGS } from '../featureFlags.js'
+import { resolveDemoFinancialUIFlag, resolveAdapterFlag, resolveOptInFlag, FEATURE_FLAGS } from '../featureFlags.js'
 
 describe('resolveDemoFinancialUIFlag', () => {
   it('is forced off in a production build even if the env var explicitly requests it on', () => {
@@ -52,5 +52,35 @@ describe('FEATURE_FLAGS', () => {
     expect(FEATURE_FLAGS.identity).toBe(true)
     expect(FEATURE_FLAGS.tournaments).toBe(true)
     expect(FEATURE_FLAGS.ratings).toBe(true)
+  })
+
+  it('defaults web3 OFF with no env override — unaudited real-money code must never be silently reachable', () => {
+    expect(FEATURE_FLAGS.web3).toBe(false)
+  })
+})
+
+// RED (now GREEN against ../featureFlags.js resolveOptInFlag): a THIRD
+// flag semantic distinct from resolveAdapterFlag (default ON) and
+// resolveDemoFinancialUIFlag (prod hard-OFF) — default OFF everywhere,
+// opt-in only via an explicit 'true'. See tasks.md 11.1/13.1 and
+// design.md Decision 7.
+describe('resolveOptInFlag', () => {
+  it('defaults off with no override', () => {
+    expect(resolveOptInFlag({ envOverride: undefined })).toBe(false)
+  })
+
+  it('defaults off with any non-"true" override, including "false" and garbage values', () => {
+    expect(resolveOptInFlag({ envOverride: 'false' })).toBe(false)
+    expect(resolveOptInFlag({ envOverride: 'TRUE' })).toBe(false)
+    expect(resolveOptInFlag({ envOverride: '1' })).toBe(false)
+    expect(resolveOptInFlag({ envOverride: 'nonsense' })).toBe(false)
+  })
+
+  it('opts in only via an explicit exact "true" override', () => {
+    expect(resolveOptInFlag({ envOverride: 'true' })).toBe(true)
+  })
+
+  it('stays off even in a non-production build with no override (unlike resolveDemoFinancialUIFlag)', () => {
+    expect(resolveOptInFlag({ envOverride: undefined })).toBe(false)
   })
 })

@@ -48,12 +48,12 @@ export default function LeaderboardPage() {
           <table className="w-full text-sm">
             <thead className="bg-zinc-900/80 text-left text-xs uppercase tracking-wide text-zinc-500">
               <tr>
-                <th className="px-4 py-3 font-medium">#</th>
-                <th className="px-4 py-3 font-medium">Jugador</th>
-                {!gameId && <th className="px-4 py-3 font-medium">Juego</th>}
-                <th className="px-4 py-3 font-medium">Tier</th>
-                <th className="px-4 py-3 text-right font-medium">Rating</th>
-                <th className="px-4 py-3 text-right font-medium">Actualizado</th>
+                <th scope="col" className="px-4 py-3 font-medium">#</th>
+                <th scope="col" className="px-4 py-3 font-medium">Jugador</th>
+                {!gameId && <th scope="col" className="px-4 py-3 font-medium">Juego</th>}
+                <th scope="col" className="px-4 py-3 font-medium">Tier</th>
+                <th scope="col" className="px-4 py-3 text-right font-medium">Rating</th>
+                <th scope="col" className="px-4 py-3 text-right font-medium">Actualizado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">

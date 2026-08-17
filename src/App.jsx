@@ -14,7 +14,9 @@ import LeaderboardPage from './pages/LeaderboardPage.jsx'
 import PlayerProfilePage from './pages/PlayerProfilePage.jsx'
 import WalletPage from './pages/WalletPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
+import CreateMarketPage from './pages/CreateMarketPage.jsx'
 import { useSession } from './auth/SessionProvider.jsx'
+import { FEATURE_FLAGS } from './config/featureFlags.js'
 
 // A real Google OAuth sign-in returns the browser to "/", not wherever the
 // user clicked "sign in" from (unlike the old mock flow's inline
@@ -59,6 +61,14 @@ export default function App() {
               legacy-migration-controls spec "Legacy identity and
               financial isolation". */}
           <Route path="mercados/:id" element={<MarketDetailPage />} />
+          {/* Permissionless on-chain market creation (proposal.md "market
+              creation: permissionless") — a genuinely NEW route, unlike
+              /mercados/:id and /wallet above which are repointed in place.
+              Registered but resolves to NotFoundPage while
+              FEATURE_FLAGS.web3 is off (default), mirroring the existing
+              demoFinancialUI gate pattern. See design.md Decision 7 and
+              tasks.md 11.5. */}
+          <Route path="mercados/nuevo" element={FEATURE_FLAGS.web3 ? <CreateMarketPage /> : <NotFoundPage />} />
           <Route element={<RequireAuth />}>
             <Route path="wallet" element={<WalletPage />} />
           </Route>

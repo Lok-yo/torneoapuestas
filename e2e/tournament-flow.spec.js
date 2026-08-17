@@ -162,7 +162,11 @@ async function stubTournamentBackend(page, state) {
 }
 
 test.describe('Tournament operations: registration -> freeze -> bracket -> official result', () => {
-  test('a participant registers, the organizer closes registration, generates the bracket, and submits an official result', async ({
+  // Skipped: retired flow — registration/lifecycle/bracket-generation/
+  // result-submission panels were removed from TournamentDetailPage.jsx's
+  // UI pending the start.gg-import redesign (internal tournament creation
+  // is being retired; the underlying RPCs/migrations are untouched).
+  test.skip('a participant registers, the organizer closes registration, generates the bracket, and submits an official result', async ({
     page,
   }) => {
     // Closes a real gap found while verifying proposal.md's success
@@ -229,7 +233,11 @@ test.describe('Tournament operations: registration -> freeze -> bracket -> offic
     await expect(page.getByText('E2E Showdown')).not.toBeVisible()
   })
 
-  test('an authenticated organizer creates a tournament from zero on /organizador', async ({ page }) => {
+  // Skipped: retired flow — the tournament-creation form was removed from
+  // OrganizerPanelPage.jsx's UI pending the start.gg-import redesign
+  // (internal tournament creation is being retired; create_tournament/0015
+  // RPC and migration are untouched).
+  test.skip('an authenticated organizer creates a tournament from zero on /organizador', async ({ page }) => {
     let tournaments = []
     await stubOrganizerSession(page)
 

@@ -12,6 +12,12 @@ export default defineConfig({
     css: true,
     // Playwright owns e2e/**; it uses its own test/describe globals that
     // conflict with Vitest's when picked up by the default include glob.
-    exclude: ['node_modules/**', 'e2e/**'],
+    // contracts/** is a separate Foundry workspace (forge test owns
+    // *.t.sol; contracts/lib/** is a vendored forge-std/openzeppelin-
+    // contracts dependency tree with its own Hardhat/Truffle JS test
+    // suite that Vitest must never try to run). supabase/functions/**
+    // is a separate Deno workspace (`deno test` owns *.test.ts there —
+    // see tasks.md Phase 2/8-10 RED tests).
+    exclude: ['node_modules/**', 'e2e/**', 'contracts/**', 'supabase/functions/**'],
   },
 })

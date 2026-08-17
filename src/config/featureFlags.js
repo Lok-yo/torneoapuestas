@@ -46,6 +46,21 @@ export function resolveAdapterFlag({ envOverride }) {
   return envOverride !== 'false'
 }
 
+/**
+ * Opt-in flag semantics — a THIRD kind of flag, distinct from both
+ * `resolveAdapterFlag` (default ON, disable via `'false'`) and
+ * `resolveDemoFinancialUIFlag` (prod hard-OFF). Unaudited real-money
+ * on-chain code (contracts/) needs default-**off**, opt-in-only-via-
+ * explicit-`'true'` semantics in every environment, including production
+ * — Amoy testnet usage is still real wallet interaction and must never
+ * be silently reachable just because a deploy forgot to set an env var.
+ * See design.md Decision 7 and openspec/changes/
+ * p2p-crypto-prediction-markets/specs/onchain-prediction-markets/spec.md.
+ */
+export function resolveOptInFlag({ envOverride }) {
+  return envOverride === 'true'
+}
+
 export const FEATURE_FLAGS = Object.freeze({
   identity: resolveAdapterFlag({ envOverride: import.meta.env.VITE_FEATURE_IDENTITY }),
   tournaments: resolveAdapterFlag({ envOverride: import.meta.env.VITE_FEATURE_TOURNAMENTS }),
@@ -54,6 +69,10 @@ export const FEATURE_FLAGS = Object.freeze({
     isProd: import.meta.env.PROD,
     envOverride: import.meta.env.VITE_DEMO_FINANCIAL_UI,
   }),
+  // Default OFF everywhere; only an explicit VITE_FEATURE_WEB3=true opts
+  // in. Routes stay registered (see App.jsx) and resolve to NotFoundPage
+  // while off, mirroring demoFinancialUI's existing gate pattern.
+  web3: resolveOptInFlag({ envOverride: import.meta.env.VITE_FEATURE_WEB3 }),
 })
 
 export const isProductionBuild = import.meta.env.PROD

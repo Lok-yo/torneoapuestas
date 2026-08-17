@@ -5,8 +5,21 @@ import { useSession } from '../auth/SessionProvider.jsx'
 import { getMarketDetails, buyMarketShares, resolveMarket } from '../repositories/marketRepository.js'
 import { getWallet } from '../repositories/walletRepository.js'
 import { toAppError } from '../lib/errors.js'
+import { FEATURE_FLAGS } from '../config/featureFlags.js'
+import OnchainMarketDetailView from './onchain/OnchainMarketDetailView.jsx'
 
 export default function MarketDetailPage() {
+  // Repointed on-chain when FEATURE_FLAGS.web3 is on (default off). The
+  // route param becomes a bytes32 questionId instead of a Postgres UUID
+  // — see OnchainMarketDetailView.jsx and design.md Decision 3/7.
+  if (FEATURE_FLAGS.web3) {
+    return <OnchainMarketDetailView />
+  }
+
+  return <LegacyMarketDetailPage />
+}
+
+function LegacyMarketDetailPage() {
   const { id } = useParams()
   const { profile, hasRole } = useSession()
   const isOrganizerOrAdmin = hasRole('organizer') || hasRole('admin')
@@ -143,41 +156,50 @@ export default function MarketDetailPage() {
                 return (
                   <div
                     key={o.id}
-                    className={`flex flex-col justify-between rounded-2xl border p-5 transition cursor-pointer ${
+                    className={`rounded-2xl border p-5 transition ${
                       isSelected
                         ? 'border-violet-500 bg-gradient-to-b from-violet-950/40 to-zinc-950 shadow-lg shadow-violet-500/10'
-                        : 'border-zinc-800/80 bg-zinc-900/50 hover:border-zinc-700'
+                        : 'border-zinc-800/80 bg-zinc-900/50'
                     }`}
-                    onClick={() => market.status === 'OPEN' && setSelectedOutcomeId(o.id)}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-zinc-100 text-sm">{o.label}</span>
-                      {isWinner && <CheckCircle size={18} className="text-emerald-400" />}
-                    </div>
-                    <div className="mt-4 flex items-end justify-between">
-                      <div>
-                        <span className="text-3xl font-extrabold text-zinc-50">{prob}%</span>
-                        <span className="ml-2 text-xs text-zinc-400 font-medium">
-                          (${(Number(o.price)).toFixed(2)} / acción)
+                    {/* Superficie de selección: un <button> real sin hijos
+                        interactivos (el control de resolución es hermano,
+                        no descendiente — sin interactivo anidado). */}
+                    <button
+                      type="button"
+                      disabled={market.status !== 'OPEN'}
+                      aria-pressed={market.status === 'OPEN' ? isSelected : undefined}
+                      onClick={() => setSelectedOutcomeId(o.id)}
+                      className={`flex w-full flex-col text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${
+                        market.status === 'OPEN' ? 'cursor-pointer' : 'cursor-default'
+                      }`}
+                    >
+                      <span className="flex items-center justify-between">
+                        <span className="font-bold text-zinc-100 text-sm">{o.label}</span>
+                        {isWinner && <CheckCircle size={18} className="text-emerald-400" />}
+                      </span>
+                      <span className="mt-4 flex items-end justify-between">
+                        <span>
+                          <span className="text-3xl font-extrabold text-zinc-50">{prob}%</span>
+                          <span className="ml-2 text-xs text-zinc-400 font-medium">
+                            (${(Number(o.price)).toFixed(2)} / acción)
+                          </span>
                         </span>
-                      </div>
-                      <span className="text-xs text-zinc-500">{Number(o.total_shares)} acciones</span>
-                    </div>
+                        <span className="text-xs text-zinc-500">{Number(o.total_shares)} acciones</span>
+                      </span>
 
-                    {/* Barra de progreso visual */}
-                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-900">
-                      <div className="h-full bg-gradient-to-r from-violet-500 to-indigo-500" style={{ width: `${prob}%` }} />
-                    </div>
+                      {/* Barra de progreso visual */}
+                      <span className="mt-3 block h-2 w-full overflow-hidden rounded-full bg-zinc-900">
+                        <span className="block h-full bg-gradient-to-r from-violet-500 to-indigo-500" style={{ width: `${prob}%` }} />
+                      </span>
+                    </button>
 
                     {/* Botón de Resolución para Organizadores */}
                     {isOrganizerOrAdmin && market.status === 'OPEN' && (
                       <button
                         type="button"
                         disabled={resolvePending}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleResolveMarket(o.id)
-                        }}
+                        onClick={() => handleResolveMarket(o.id)}
                         className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-amber-300 hover:bg-amber-500/20 transition"
                       >
                         Resolver como Ganador

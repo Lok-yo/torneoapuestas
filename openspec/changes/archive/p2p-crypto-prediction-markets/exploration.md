@@ -1,5 +1,11 @@
 # Exploration: Non-custodial P2P crypto prediction markets (USDC/Polygon) layered on GG2 tournaments
 
+## Product redirect (2026-08-15)
+
+Scope refined after feedback from a professor/classmates: GG2 stops being the tournament-authority (organizer creates tournament, manages bracket, submits official result) and becomes a **prediction-market layer on top of tournaments sourced from the start.gg API**, filtered to Mexico. Rationale: two-sided marketplaces (tournaments + bettors) are hard to bootstrap simultaneously; start.gg is already the de-facto tournament infra for this scene (competitive gaming/Smash), so building a competing tournament CMS is wasted effort — the actual product differentiator is the betting/prediction layer, not tournament hosting.
+
+**Already executed** (soft retirement, done — see commit for this change once committed): the internal tournament-creation/bracket-authority UI was hidden/removed from `src/pages/OrganizerPanelPage.jsx` and `src/pages/TournamentDetailPage.jsx`. Market-admin UI was extracted into `src/components/PredictionMarketAdminPanel.jsx`, independent of tournament creation. **Nothing at the database layer was touched**: all migrations (0008, 0010, 0011, 0012 rating trigger, 0013, 0015) remain in place untouched — the rating-projection trigger and the auto-resolve-markets trigger fire on writes to `results`/`tournaments` regardless of who/what writes there, so they survive this pivot unchanged; only the *writer* needs to become a start.gg-import path instead of the organizer UI. Two e2e specs (`e2e/tournament-flow.spec.js`) that exercised the retired flow are `test.skip`'d with explanatory comments, not deleted.
+
 ## Current State
 
 - **Identity**: `src/auth/SessionProvider.jsx` + `src/repositories/sessionRepository.js` — Google OAuth via Supabase Auth; `auth.users.id` (uuid) is the identity primitive, with `profiles.username` and `user_roles` (organizer/referee/admin) attached. No wallet-address concept exists anywhere in the app or schema today.
@@ -40,13 +46,22 @@
 
 ## Resolution/oracle approaches (orthogonal, tightly coupled)
 
-- **A. Centralized relayer using existing `submit_official_result`/tournament-COMPLETED authority as sole on-chain oracle** — cheapest/fastest, reuses what GG2 already has, but reintroduces a single point of trust (the relayer signing key) exactly where non-custodial products remove one.
+**Updated by the product redirect**: the oracle-of-record is no longer GG2's own `submit_official_result` RPC (that authority chain is retired at the UI level). It becomes **start.gg's own result data**, pulled by a new ingestion worker. The relayer/challenge-window shape below is unchanged in mechanism — only the upstream data source changes.
+
+- **A. Centralized relayer using a start.gg-ingestion worker as sole on-chain oracle** — a scheduled job polls start.gg's GraphQL API (`sets`/`standings`, keyed by `completedAt`/`state`) for MX-filtered tournaments, writes into GG2's existing `results`/`matches` tables (reusing the rating-projection and auto-resolve triggers unchanged), then a relayer posts the outcome on-chain. Cheapest/fastest, but reintroduces a single point of trust (the relayer signing key + trust that the ingestion worker read start.gg correctly) exactly where non-custodial products remove one.
 - **B. Full UMA-style Optimistic Oracle** (propose+bond, challenge window, dispute escalation) — Polymarket's actual mechanism, credibly neutral, but heavy integration lift/UX overhead redundant for the common honest case.
-- **C. Recommended hybrid**: relayer posts the GG2-authorized result immediately, behind a short permissionless challenge window where any wallet can dispute by staking a bond; disputes escalate to a designated multisig for MVP, with real UMA OO integration as a defined Phase 2. Adds an economic disincentive against a compromised/corrupt organizer without requiring full UMA integration on day one.
+- **C. Recommended hybrid**: relayer posts the start.gg-sourced result immediately, behind a short permissionless challenge window where any wallet can dispute by staking a bond; disputes escalate to a designated multisig for MVP, with real UMA OO integration as a defined Phase 2. Adds an economic disincentive against a bad ingestion read or a compromised relayer without requiring full UMA integration on day one.
+
+## start.gg API — key facts for design (researched 2026-08-15)
+
+- **GraphQL** at `api.start.gg/gql/alpha` (still path-labeled "alpha" after years in public use — no changelog found, treat schema stability as unproven). Auth: bearer token from a developer profile, expires yearly; OAuth exists but isn't needed for public read-only tournament data.
+- **Regional filter confirmed**: `tournaments(filter: { countryCode: "MX" })` — exactly what's needed for the Mexico-first scope.
+- **No webhooks/subscriptions found** — result detection is polling-only, against `sets.state`/`sets.completedAt`. Realistic latency: seconds-to-tens-of-seconds, bounded by the rate limit below.
+- **Rate limit**: ~80 requests/60s, max 1000 objects per request (per official docs) — start.gg's ToS also reserves the right to set stricter per-token limits at its sole discretion.
 
 ## Recommendation
 
-Approach 3 (CTF-lite) + Resolution C (relayer-with-challenge-window, UMA as Phase 2). Keeps custom-audit surface comparable to a bespoke contract while inheriting CTF's proven security/composability, and phases decentralization-of-resolution instead of blocking MVP on full UMA integration.
+Approach 3 (CTF-lite) + Resolution C (relayer-with-challenge-window over start.gg-sourced results, UMA as Phase 2). Keeps custom-audit surface comparable to a bespoke contract while inheriting CTF's proven security/composability, and phases decentralization-of-resolution instead of blocking MVP on full UMA integration.
 
 ## Net-new infra required
 
@@ -67,6 +82,8 @@ Wallet address (EOA/smart-account, no inherent link to a person) vs. GG2 profile
 
 ## Risks
 
+- **NEW, first-order — start.gg API Terms of Service conflict** (`start.gg/about/apitos`, fetched 2026-08-15): (a) §13 explicitly forbids redistributing/reselling start.gg data or any service built on it; (b) §14's "no illegal use" clause names gambling alongside piracy as an example of prohibited use — not a blanket ban, but a clear signal of hostile intent toward wagering products; (c) §9.1 lets start.gg suspend/terminate API access "in our sole discretion at any time, for any reason," with **no notice required**; (d) their liability cap for anything going wrong on their end is USD $5. This is a *business-continuity/contractual* risk to the whole external-data architecture, distinct from and orthogonal to the maintainer-owned gambling-legality question — it means the entire product could lose its tournament-data source unilaterally and without warning. Their ToS itself invites high-volume/commercial use cases to contact `hello@start.gg` for a partnership (§2.2.5).
+  - **Maintainer decision (2026-08-15)**: accepted as-is, no mitigation. No partnership outreach, no fallback/alternate ingestion path. If start.gg revokes API access, the product's tournament-data source goes down with it — explicitly acceptable to the maintainer. `sdd-propose`/`sdd-design` should NOT scope a fallback ingestion path or a start.gg outreach step unless asked again.
 - Frontend-only IP geoblocking is not established as sufficient for a permissionless smart contract (Polymarket precedent: FBI/DOJ action Jan 2025 despite geoblocking + non-custodial design). Real OFAC exposure is per-wallet-address (SDN list). A technical mitigation exists independent of the (maintainer-owned, out-of-scope) legal question: an on-chain sanctions check (e.g., Chainalysis's free, publicly deployed on-chain sanctions oracle contract, callable from within the settlement/trade contract) is architecturally stronger than IP-only geoblocking and should be evaluated in design — not treated as a substitute for the maintainer's own legal compliance work.
 - Real USDC custody-adjacent code needs a funded professional audit before mainnet deployment regardless of framework choice — budget/schedule for it explicitly.
 - The centralized-relayer fast path (Approach A/C) reintroduces a single point of trust (relayer key + organizer/referee integrity) — must be explicitly scoped as an accepted MVP trust assumption, not silently framed as "fully non-custodial resolution."

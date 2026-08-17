@@ -1,11 +1,86 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, PlusCircle, MinusCircle, RefreshCw, AlertCircle } from 'lucide-react'
 import { useSession } from '../auth/SessionProvider.jsx'
 import { getWallet, depositFunds, withdrawFunds, getTransactionHistory } from '../repositories/walletRepository.js'
 import { formatDateTime } from '../lib/format.js'
 import { toAppError } from '../lib/errors.js'
+import { FEATURE_FLAGS } from '../config/featureFlags.js'
+import OnchainWalletView from './onchain/OnchainWalletView.jsx'
 
 export default function WalletPage() {
+  // Repointed on-chain when FEATURE_FLAGS.web3 is on (default off — see
+  // design.md Decision 7 / File Changes). Off by default, this route's
+  // behavior is byte-identical to before this change.
+  if (FEATURE_FLAGS.web3) {
+    return <OnchainWalletView />
+  }
+
+  return <LegacyWalletPage />
+}
+
+// Diálogo accesible: foco inicial, trap de Tab/Shift+Tab, cierre con
+// Escape y clic en el backdrop (no dentro del panel). role="dialog" +
+// aria-modal solo anuncian la semántica; el manejo de foco es lo que
+// hace al modal realmente operable por teclado/lector de pantalla.
+function ModalDialog({ labelledBy, onClose, children }) {
+  const dialogRef = useRef(null)
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return undefined
+    const focusables = dialog.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    )
+    const restoreTo = document.activeElement
+    ;(focusables[0] ?? dialog).focus()
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const items = Array.from(
+        dialog.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'),
+      ).filter((el) => !el.disabled)
+      if (items.length === 0) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+
+    dialog.addEventListener('keydown', handleKeyDown)
+    return () => {
+      dialog.removeEventListener('keydown', handleKeyDown)
+      if (restoreTo instanceof HTMLElement) restoreTo.focus()
+    }
+  }, [onClose])
+
+  return (
+    <div
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 focus:outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={labelledBy}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+function LegacyWalletPage() {
   const { profile } = useSession()
   const [walletState, setWalletState] = useState({ status: 'loading', wallet: null, transactions: [], error: null })
   const [depositAmount, setDepositAmount] = useState('50')
@@ -188,11 +263,11 @@ export default function WalletPage() {
             <table className="w-full text-sm">
               <thead className="bg-zinc-900/80 text-left text-xs uppercase tracking-wide text-zinc-500">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Fecha</th>
-                  <th className="px-4 py-3 font-medium">Tipo</th>
-                  <th className="px-4 py-3 font-medium">Descripción</th>
-                  <th className="px-4 py-3 text-right font-medium">Monto</th>
-                  <th className="px-4 py-3 text-center font-medium">Estado</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Fecha</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Tipo</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Descripción</th>
+                  <th scope="col" className="px-4 py-3 text-right font-medium">Monto</th>
+                  <th scope="col" className="px-4 py-3 text-center font-medium">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
@@ -226,7 +301,7 @@ export default function WalletPage() {
 
       {/* Modal Depositar */}
       {activeModal === 'deposit' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="deposit-modal-title">
+        <ModalDialog labelledBy="deposit-modal-title" onClose={() => setActiveModal(null)}>
           <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6">
             <h3 id="deposit-modal-title" className="text-lg font-bold text-zinc-50">Depositar Saldo</h3>
             <p className="mt-1 text-xs text-zinc-400">
@@ -267,12 +342,12 @@ export default function WalletPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalDialog>
       )}
 
       {/* Modal Retirar */}
       {activeModal === 'withdraw' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="withdraw-modal-title">
+        <ModalDialog labelledBy="withdraw-modal-title" onClose={() => setActiveModal(null)}>
           <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6">
             <h3 id="withdraw-modal-title" className="text-lg font-bold text-zinc-50">Retirar Saldo</h3>
             <p className="mt-1 text-xs text-zinc-400">
@@ -314,7 +389,7 @@ export default function WalletPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalDialog>
       )}
     </div>
   )

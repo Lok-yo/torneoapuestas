@@ -5,13 +5,19 @@ on:
     branches: [main]
   pull_request:
 
-# Fail closed: any job failure blocks merge. Jobs run in one strict
-# sequential gate chain via `needs` — frozen install -> lint -> unit tests
-# (with coverage) -> Supabase migrations/RLS/pgTAP -> build -> Playwright
-# e2e -> npm audit — so a cheap, fast failure (lint) always short-circuits
-# every more expensive step after it, and nothing (including the
-# dependency audit) ever runs, or can pass independently, out of order.
-# See tasks.md 7.1.
+# Fail closed: any job failure blocks merge. The JS/Supabase chain runs in
+# one strict sequential gate via `needs` — frozen install -> lint -> unit
+# tests (with coverage) -> Supabase migrations/RLS/pgTAP -> build ->
+# Playwright e2e -> npm audit — so a cheap, fast failure (lint) always
+# short-circuits every more expensive step after it. See tasks.md 7.1.
+#
+# `contracts` (Foundry fuzz/coverage + Slither) is a separate, independent
+# workspace (contracts/, its own toolchain) and runs in parallel to that
+# chain rather than serialized behind it — nothing in the Solidity gate
+# depends on npm install order, and nothing in the JS chain depends on
+# Foundry. Both are still required checks: GitHub branch protection blocks
+# merge on ANY job failing, JS chain or contracts. See
+# p2p-crypto-prediction-markets tasks.md 6.1/6.2.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -136,3 +142,49 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm audit --audit-level=high
+
+  contracts:
+    name: Foundry fuzz + coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Install Foundry dependencies
+        working-directory: contracts
+        run: |
+          forge install foundry-rs/forge-std --no-commit
+          forge install OpenZeppelin/openzeppelin-contracts@v4.9.6 --no-commit
+      - name: forge fmt --check
+        working-directory: contracts
+        run: forge fmt --check
+      - name: forge build
+        working-directory: contracts
+        run: forge build --sizes
+      - name: forge test (fuzz)
+        working-directory: contracts
+        run: forge test --fuzz-runs 256 -vvv
+      - name: forge coverage
+        working-directory: contracts
+        run: forge coverage --report summary
+
+  slither:
+    name: Slither static analysis (reentrancy, access control)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Install Foundry dependencies
+        working-directory: contracts
+        run: |
+          forge install foundry-rs/forge-std --no-commit
+          forge install OpenZeppelin/openzeppelin-contracts@v4.9.6 --no-commit
+      # Blocking gate: any Slither-reported high/medium finding on
+      # MarketFactory/ResolutionAdapter (reentrancy, access control) fails
+      # this job and therefore the merge, per design.md "Testing Strategy"
+      # (Static: Slither in CI) and tasks.md 6.2.
+      - name: Run Slither
+        uses: crytic/slither-action@v0.4.0
+        with:
+          target: contracts/
+          slither-args: --filter-paths "lib/" --exclude-dependencies
+          fail-on: medium

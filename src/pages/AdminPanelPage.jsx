@@ -76,9 +76,9 @@ export default function AdminPanelPage() {
         <table className="w-full text-left text-xs text-zinc-300">
           <thead className="bg-zinc-900/80 text-[11px] font-semibold uppercase text-zinc-400 border-b border-zinc-800">
             <tr>
-              <th className="px-4 py-3">Usuario / Email</th>
-              <th className="px-4 py-3">Roles Actuales</th>
-              <th className="px-4 py-3 text-right">Acciones de Rol</th>
+              <th scope="col" className="px-4 py-3">Usuario / Email</th>
+              <th scope="col" className="px-4 py-3">Roles Actuales</th>
+              <th scope="col" className="px-4 py-3 text-right">Acciones de Rol</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-900">

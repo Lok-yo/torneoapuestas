@@ -1,0 +1,8 @@
+# Foundry build artifacts and vendored dependencies. CI re-fetches lib/
+# via `forge install` (see .github/workflows/ci.yml contracts job) rather
+# than committing forge-std/openzeppelin-contracts wholesale.
+lib/
+out/
+cache/
+broadcast/
+.env
