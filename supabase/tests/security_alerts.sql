@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(9);
+select plan(10);
 
 insert into auth.users (id, email) values
   ('f5000000-0000-0000-0000-000000000001', 'secalert-admin@example.com'),
