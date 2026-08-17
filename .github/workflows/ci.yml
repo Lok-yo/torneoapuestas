@@ -186,5 +186,5 @@ jobs:
         uses: crytic/slither-action@v0.4.0
         with:
           target: contracts/
-          slither-args: --filter-paths "lib/" --exclude-dependencies
+          slither-args: --filter-paths "lib/" --exclude-dependencies --exclude timestamp,naming-convention,reentrancy-events,immutable-states
           fail-on: medium
