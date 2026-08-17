@@ -1,0 +1,190 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Fail closed: any job failure blocks merge. The JS/Supabase chain runs in
+# one strict sequential gate via `needs` — frozen install -> lint -> unit
+# tests (with coverage) -> Supabase migrations/RLS/pgTAP -> build ->
+# Playwright e2e -> npm audit — so a cheap, fast failure (lint) always
+# short-circuits every more expensive step after it. See tasks.md 7.1.
+#
+# `contracts` (Foundry fuzz/coverage + Slither) is a separate, independent
+# workspace (contracts/, its own toolchain) and runs in parallel to that
+# chain rather than serialized behind it — nothing in the Solidity gate
+# depends on npm install order, and nothing in the JS chain depends on
+# Foundry. Both are still required checks: GitHub branch protection blocks
+# merge on ANY job failing, JS chain or contracts. See
+# p2p-crypto-prediction-markets tasks.md 6.1/6.2.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install:
+    name: Install (frozen lockfile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies (npm ci, ignore scripts)
+        run: npm ci --ignore-scripts
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ github.sha }}
+
+  lint:
+    name: Lint
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+
+  unit-test:
+    name: Unit tests
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx vitest run --coverage
+
+  db-migrations:
+    name: Supabase migrations, RLS, pgTAP
+    needs: unit-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Start local Supabase stack
+        run: npx supabase start
+      - name: Replay migrations on a clean database
+        run: npx supabase db reset
+      - name: Run pgTAP suite
+        run: npx supabase test db --local
+      - name: Stop local Supabase stack
+        if: always()
+        run: npx supabase stop
+
+  build:
+    name: Build
+    needs: db-migrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
+
+  e2e:
+    name: Playwright
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      # webServer runs `npm run preview`, which serves an already-built
+      # dist/ — build it here with stub (non-secret) credentials so the
+      # OAuth-stub/network-interception specs have a fixed, non-resolving
+      # Supabase origin to intercept. Never real project credentials.
+      - name: Build with stub Supabase credentials for e2e interception
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://e2e-stub.supabase.co
+          VITE_SUPABASE_ANON_KEY: e2e-stub-anon-key
+      - run: npx playwright test
+        env:
+          CI: true
+
+  audit:
+    name: npm audit
+    needs: e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=high
+
+  contracts:
+    name: Foundry fuzz + coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Install Foundry dependencies
+        working-directory: contracts
+        run: |
+          forge install foundry-rs/forge-std --no-commit
+          forge install OpenZeppelin/openzeppelin-contracts@v4.9.6 --no-commit
+      - name: forge fmt --check
+        working-directory: contracts
+        run: forge fmt --check
+      - name: forge build
+        working-directory: contracts
+        run: forge build --sizes
+      - name: forge test (fuzz)
+        working-directory: contracts
+        run: forge test --fuzz-runs 256 -vvv
+      - name: forge coverage
+        working-directory: contracts
+        run: forge coverage --report summary
+
+  slither:
+    name: Slither static analysis (reentrancy, access control)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Install Foundry dependencies
+        working-directory: contracts
+        run: |
+          forge install foundry-rs/forge-std --no-commit
+          forge install OpenZeppelin/openzeppelin-contracts@v4.9.6 --no-commit
+      # Blocking gate: any Slither-reported high/medium finding on
+      # MarketFactory/ResolutionAdapter (reentrancy, access control) fails
+      # this job and therefore the merge, per design.md "Testing Strategy"
+      # (Static: Slither in CI) and tasks.md 6.2.
+      - name: Run Slither
+        uses: crytic/slither-action@v0.4.0
+        with:
+          target: contracts/
+          slither-args: --filter-paths "lib/" --exclude-dependencies
+          fail-on: medium

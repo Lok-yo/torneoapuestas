@@ -1,0 +1,58 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@std/assert@1": "1.0.19",
+    "jsr:@std/internal@^1.0.12": "1.0.14"
+  },
+  "jsr": {
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    }
+  },
+  "redirects": {
+    "https://esm.sh/viem@2/accounts?bundle": "https://esm.sh/viem@2.55.16/accounts?bundle",
+    "https://esm.sh/viem@2?bundle": "https://esm.sh/viem@2.55.16?bundle"
+  },
+  "remote": {
+    "https://esm.sh/viem@2.55.16/accounts?bundle": "5670da5ff5e778aa4e2e0295f61954e4512146bfc6edc802a1987190325faa08",
+    "https://esm.sh/viem@2.55.16/denonext/accounts.bundle.mjs": "f2a7d230f34d7ca8170299a25c50351adba06a5f0f3aa7ca0ee0e1044d54642f",
+    "https://esm.sh/viem@2.55.16/denonext/viem.bundle.mjs": "213efb55216e331e6145fb90726b5e0a6ce7d6ee082f2e896af50e0a6e2bc35f",
+    "https://esm.sh/viem@2.55.16?bundle": "b83d1a200feda381136aaa9f3cf2b8de0558012e95d6ec18996fba242fafb592"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@playwright/test@^1.62.1",
+        "npm:@supabase/supabase-js@^2.112.3",
+        "npm:@tailwindcss/vite@^4.3.3",
+        "npm:@tanstack/react-query@^5.101.4",
+        "npm:@testing-library/jest-dom@^7.0.1",
+        "npm:@testing-library/react@^16.3.2",
+        "npm:@types/react-dom@^19.2.3",
+        "npm:@types/react@^19.2.17",
+        "npm:@vitejs/plugin-react@^6.0.4",
+        "npm:jsdom@^30.0.1",
+        "npm:lucide-react@^1.31.0",
+        "npm:oxlint@^1.75.0",
+        "npm:react-dom@^19.2.8",
+        "npm:react-router-dom@^7.18.2",
+        "npm:react@^19.2.8",
+        "npm:recharts@^3.10.1",
+        "npm:siwe@3",
+        "npm:supabase@^2.113.0",
+        "npm:tailwindcss@^4.3.3",
+        "npm:viem@^2.55.16",
+        "npm:vite@^8.2.0",
+        "npm:vitest@^4.1.10",
+        "npm:wagmi@^3.7.6",
+        "npm:zustand@^5.0.14"
+      ]
+    }
+  }
+}
