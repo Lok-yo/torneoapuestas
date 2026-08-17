@@ -1,15 +1,10 @@
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { Trophy, Wallet, LogOut, Sparkles } from 'lucide-react'
+import { Trophy, Wallet, LogOut, Sparkles, PlusCircle } from 'lucide-react'
 import { useSession } from '../auth/SessionProvider.jsx'
 import { claimOrganizerRole } from '../repositories/tournamentRepository.js'
+import { FEATURE_FLAGS } from '../config/featureFlags.js'
 import Avatar from './Avatar.jsx'
-
-const NAV_LINKS = [
-  { to: '/', label: 'Inicio', end: true },
-  { to: '/torneos', label: 'Torneos' },
-  { to: '/ranking', label: 'Ranking' },
-]
 
 export default function Navbar() {
   const { status, profile, hasRole, signOut, refresh } = useSession()
@@ -49,25 +44,56 @@ export default function Navbar() {
           </Link>
 
           <nav className="hidden items-center gap-1.5 text-xs font-semibold text-zinc-400 sm:flex">
-            {NAV_LINKS.map((link) => (
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                `px-3 py-1.5 rounded-xl transition ${
+                  isActive ? 'bg-zinc-800/80 text-zinc-50 shadow-inner' : 'hover:bg-zinc-900 hover:text-zinc-200'
+                }`
+              }
+            >
+              Inicio
+            </NavLink>
+            <NavLink
+              to="/torneos"
+              className={({ isActive }) =>
+                `px-3 py-1.5 rounded-xl transition ${
+                  isActive ? 'bg-zinc-800/80 text-zinc-50 shadow-inner' : 'hover:bg-zinc-900 hover:text-zinc-200'
+                }`
+              }
+            >
+              Torneos
+            </NavLink>
+            <NavLink
+              to="/ranking"
+              className={({ isActive }) =>
+                `px-3 py-1.5 rounded-xl transition ${
+                  isActive ? 'bg-zinc-800/80 text-zinc-50 shadow-inner' : 'hover:bg-zinc-900 hover:text-zinc-200'
+                }`
+              }
+            >
+              Ranking
+            </NavLink>
+
+            {FEATURE_FLAGS.web3 && (
               <NavLink
-                key={link.to}
-                to={link.to}
-                end={link.end}
+                to="/mercados/nuevo"
                 className={({ isActive }) =>
-                  `px-3 py-1.5 rounded-xl transition ${
+                  `inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-violet-300 font-bold transition ${
                     isActive
-                      ? 'bg-zinc-800/80 text-zinc-50 shadow-inner'
-                      : 'hover:bg-zinc-900 hover:text-zinc-200'
+                      ? 'bg-violet-500/20 border border-violet-500/40'
+                      : 'hover:bg-violet-500/10 hover:text-violet-200'
                   }`
                 }
               >
-                {link.label}
+                <PlusCircle size={13} />
+                Crear Mercado
               </NavLink>
-            ))}
+            )}
 
-            {isAuthenticated && (
-              isOrganizerOrAdmin ? (
+            {isAuthenticated &&
+              (isOrganizerOrAdmin ? (
                 <>
                   <NavLink
                     to="/organizador"
@@ -102,26 +128,26 @@ export default function Navbar() {
                   onClick={handleClaimOrganizer}
                   disabled={claiming}
                   className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-violet-500/10 border border-violet-500/30 text-xs font-semibold text-violet-300 hover:bg-violet-500/20 disabled:opacity-50 transition"
-                  title="Obtener rol de organizador para crear torneos"
+                  title="Obtener rol de organizador para administrar torneos"
                 >
                   <Sparkles size={12} />
                   {claiming ? 'Activando…' : 'Ser Organizador'}
                 </button>
-              )
-            )}
+              ))}
           </nav>
         </div>
 
         <div className="flex items-center gap-3">
+          <Link
+            to="/wallet"
+            className="flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:border-violet-500/40 hover:bg-zinc-900 transition shadow-sm"
+          >
+            <Wallet size={14} className="text-emerald-400" />
+            <span>Billetera</span>
+          </Link>
+
           {isAuthenticated ? (
             <>
-              <Link
-                to="/wallet"
-                className="flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:border-violet-500/40 hover:bg-zinc-900 transition shadow-sm"
-              >
-                <Wallet size={14} className="text-emerald-400" />
-                <span>Billetera</span>
-              </Link>
               <Link
                 to={`/jugadores/${profile.username}`}
                 className="flex items-center gap-2 rounded-xl p-1 hover:bg-zinc-900 transition"

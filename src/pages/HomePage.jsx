@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Wallet, PlusCircle } from 'lucide-react'
 import { GAMES } from '../data/games.js'
 import { useSession } from '../auth/SessionProvider.jsx'
 import { listTournaments } from '../repositories/tournamentRepository.js'
+import { FEATURE_FLAGS } from '../config/featureFlags.js'
 import GameTag from '../components/GameTag.jsx'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
 import LiveBetTicker from '../components/LiveBetTicker.jsx'
@@ -17,15 +18,21 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-14">
       <section className="flex flex-col items-start gap-4 rounded-3xl border border-zinc-800 bg-gradient-to-br from-violet-500/10 via-zinc-900 to-zinc-950 p-8 sm:p-12 shadow-2xl">
-        <span className="rounded-full border border-violet-500/40 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-300">
-          Torneos competitivos
-        </span>
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-full border border-violet-500/40 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-300">
+            Torneos FGC & Mercados P2P
+          </span>
+          {FEATURE_FLAGS.web3 && (
+            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
+              Web3 On-Chain Habilitado
+            </span>
+          )}
+        </div>
         <h1 className="max-w-2xl text-3xl font-bold text-zinc-50 sm:text-5xl">
-          Organiza torneos de lucha y sigue el ranking oficial
+          Torneos de Fighting Games y Mercados de Predicción P2P
         </h1>
         <p className="max-w-xl text-zinc-400">
-          Smash Ultimate, Melee, Street Fighter 6, Fatal Fury: City of the Wolves, Tekken 8 y Rivals
-          of Aether II. Registro, brackets, resultados oficiales y rating por jugador.
+          Sigue torneos reales, rankings de jugadores y participa en mercados de predicción descentralizados en Polygon con USDC.
         </p>
         <div className="flex flex-wrap gap-3 pt-2">
           <Link
@@ -34,6 +41,20 @@ export default function HomePage() {
           >
             Ver torneos <ArrowRight size={16} />
           </Link>
+          <Link
+            to="/wallet"
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900/80 px-5 py-2.5 text-sm font-semibold !text-zinc-200 hover:border-zinc-500 hover:bg-zinc-800 transition"
+          >
+            <Wallet size={16} className="text-emerald-400" /> Billetera
+          </Link>
+          {FEATURE_FLAGS.web3 && (
+            <Link
+              to="/mercados/nuevo"
+              className="inline-flex items-center gap-2 rounded-xl border border-violet-500/50 bg-violet-500/20 px-5 py-2.5 text-sm font-bold !text-violet-200 hover:bg-violet-500/30 transition"
+            >
+              <PlusCircle size={16} /> Crear Mercado
+            </Link>
+          )}
           {!isAuthenticated && (
             <Link
               to="/login"
