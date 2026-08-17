@@ -127,6 +127,7 @@ export default function Navbar() {
                   type="button"
                   onClick={handleClaimOrganizer}
                   disabled={claiming}
+                  aria-busy={claiming}
                   className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-violet-500/10 border border-violet-500/30 text-xs font-semibold text-violet-300 hover:bg-violet-500/20 disabled:opacity-50 transition"
                   title="Obtener rol de organizador para administrar torneos"
                 >
@@ -138,16 +139,15 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Link
-            to="/wallet"
-            className="flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:border-violet-500/40 hover:bg-zinc-900 transition shadow-sm"
-          >
-            <Wallet size={14} className="text-emerald-400" />
-            <span>Billetera</span>
-          </Link>
-
           {isAuthenticated ? (
             <>
+              <Link
+                to="/wallet"
+                className="flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:border-violet-500/40 hover:bg-zinc-900 transition shadow-sm"
+              >
+                <Wallet size={14} className="text-emerald-400" />
+                <span>Billetera</span>
+              </Link>
               <Link
                 to={`/jugadores/${profile.username}`}
                 className="flex items-center gap-2 rounded-xl p-1 hover:bg-zinc-900 transition"
@@ -161,6 +161,7 @@ export default function Navbar() {
                 type="button"
                 onClick={signOut}
                 title="Cerrar sesión"
+                aria-label="Cerrar sesión"
                 className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 transition"
               >
                 <LogOut size={16} />

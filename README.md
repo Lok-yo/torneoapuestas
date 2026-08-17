@@ -1,120 +1,121 @@
-# TorneoApuestas — Production-ready tournament platform (Stage 1)
+# TorneoApuestas — Fighting Games Tournament Platform & P2P Prediction Markets
 
-React 19 + Vite SPA backed by Supabase (Postgres + Auth + Edge Functions).
-Stage 1 covers authenticated identity, one seeded game/format (SSBU
-singles, single-elimination, 8 participants), tournament operations,
-official results, and rating projections/leaderboard. It explicitly
-excludes real cryptocurrency, wallets, custody, deposits/withdrawals,
-KYC collection, and monetized prediction markets — see
-`openspec/changes/production-ready-tournament-betting-platform/proposal.md`
-"Out of Scope" for the authoritative list.
+A production-ready esports tournament and prediction-market platform. Built with React 19 + Vite, backed by Supabase (Postgres + Row-Level Security + Auth + Edge Functions), Solidity contracts (Foundry + Gnosis Conditional Tokens Framework on Polygon Amoy), and wagmi/viem.
 
-## Environment and secrets contract
+- **Tournament Engine**: Automatic ingestion of esports tournaments from the **start.gg** API (filtered by region/game), automated bracket lifecycle, official results, and player Elo ratings.
+- **P2P Prediction Markets**: Non-custodial prediction markets on Polygon Amoy testnet using USDC collateral and Gnosis CTF. Includes permissionless market creation, relayer result posting, challenge windows, bond accounting, and multisig arbitration.
+- **Identity & Security**: Supabase Auth with Google OAuth, atomic case-insensitive `@username` claim, optional 1:1 SIWE wallet linking, and strict RLS database grants.
 
-Copy `.env.example` to `.env` (git-ignored) and fill in real values for
-local development. **Never commit a real `.env` or a service-role key.**
+---
 
-### Client (Vite, `VITE_*`, bundled into the browser build)
+## 🛠️ Environment and Setup Contract
 
-| Variable | Required | Default when unset | Notes |
+Copy `.env.example` to `.env.local` (git-ignored) and fill in your Supabase & Web3 variables. **Never commit a real `.env` or service-role key.**
+
+### Client Environment Variables (Vite, `VITE_*`)
+
+| Variable | Required | Default | Description |
 |---|---|---|---|
-| `VITE_SUPABASE_URL` | Yes | — | Public Supabase project URL. Every repository's `assertConfigured()` fails into a truthful `UNAVAILABLE` state (never a fixture) when this or the anon key is missing — see `src/lib/supabase.js`. |
-| `VITE_SUPABASE_ANON_KEY` | Yes | — | Public anon key only. The service-role key must never appear in client code or a `VITE_*` variable — it would ship to every browser. |
-| `VITE_FEATURE_IDENTITY` | No | enabled | Set to the literal string `false` to reversibly disable the identity adapter (emergency disablement — see `legacy-migration-controls` spec). Honored in every environment, including production. |
-| `VITE_FEATURE_TOURNAMENTS` | No | enabled | Same mechanism, for the tournament/bracket/result adapters. |
-| `VITE_FEATURE_RATINGS` | No | enabled | Same mechanism, for the ratings/leaderboard adapter. |
-| `VITE_DEMO_FINANCIAL_UI` | No | enabled in dev, **hard-forced off in production** | Gates the legacy demo wallet/prediction-market UI (`src/store/useWalletStore.js` and friends). `import.meta.env.PROD` overrides this at build time — no override can re-enable it in a production bundle. See `src/config/featureFlags.js`. |
+| `VITE_SUPABASE_URL` | **Yes** | — | Public Supabase project URL (`https://<project_ref>.supabase.co`). |
+| `VITE_SUPABASE_ANON_KEY` | **Yes** | — | Public anon API key for client-side Supabase calls. |
+| `VITE_FEATURE_WEB3` | No | `false` | Set to `true` to enable the on-chain Web3 prediction markets, wallet connection, `/mercados/nuevo` route, and admin panel. |
+| `VITE_FEATURE_IDENTITY` | No | `true` | Set to `false` to emergency-disable the Supabase identity adapter. |
+| `VITE_FEATURE_TOURNAMENTS` | No | `true` | Set to `false` to emergency-disable the tournament/bracket adapter. |
+| `VITE_FEATURE_RATINGS` | No | `true` | Set to `false` to emergency-disable the ratings/leaderboard adapter. |
+| `VITE_MARKET_FACTORY_ADDRESS` | No | Amoy default | Address of deployed `MarketFactory.sol` on Polygon Amoy. |
+| `VITE_RESOLUTION_ADAPTER_ADDRESS` | No | Amoy default | Address of deployed `ResolutionAdapter.sol` on Polygon Amoy. |
+| `VITE_USDC_ADDRESS` | No | Amoy default | Testnet USDC ERC-20 token address on Polygon Amoy. |
+| `VITE_CTF_ADDRESS` | No | Amoy default | Gnosis `ConditionalTokens` singleton contract address on Polygon Amoy. |
 
-### Edge Functions (Deno runtime, `Deno.env.get(...)`)
+---
 
-| Variable | Required | Notes |
-|---|---|---|
-| `SUPABASE_URL` | Yes | Injected automatically by the Supabase Edge Functions runtime — not something you set manually in `.env`. |
-| `SUPABASE_ANON_KEY` | Yes | Same — injected automatically. Every Edge Function forwards the **caller's own JWT** (not a service-role key) to Postgres, so RLS — not the function — is the real authorization boundary. |
+## 🔑 Google OAuth Setup (Supabase + Google Cloud)
 
-### Deploy-time only (never a `VITE_*` variable, never in the browser bundle)
+To enable Google sign-in locally and in production:
 
-| Variable | Required | Notes |
-|---|---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes, for the maintainer only | Used exactly once, manually, by the maintainer to apply the admin-bootstrap migration (see below). Never wired into any runtime code path, endpoint, or environment the app itself reads. |
+1. **Google Cloud Console**:
+   - Go to [Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials).
+   - Create an **OAuth 2.0 Client ID** (Web application).
+   - Add Authorized Redirect URI: `https://<your-supabase-project-ref>.supabase.co/auth/v1/callback`
 
-## Local development
+2. **Supabase Dashboard**:
+   - Go to **Authentication -> Providers -> Google**.
+   - Enable Google and paste your Client ID and Client Secret.
+   - Go to **Authentication -> URL Configuration**:
+     - Set **Site URL**: `http://localhost:5173/`
+     - Add to **Redirect URLs**: `http://localhost:5173/` and `http://localhost:5173`
 
-```bash
-npm ci                 # frozen install
-npm run dev             # Vite dev server
-npm run lint             # oxlint
-npm run test              # vitest (unit)
-npm run build              # production build
-npm run preview              # serve the built dist/
-```
+---
 
-## Testing
+## ⛽ Polygon Amoy Testnet (Free Testing)
 
-| Layer | Command | What it covers |
-|---|---|---|
-| Unit (Vitest + RTL) | `npm run test -- --run` | Domain logic (`src/domain/**`), repositories, feature flags, `SessionProvider`, `RequireAuth` supporting logic. |
-| Postgres / pgTAP | `npm run test:db` (wraps `supabase test db`) | Schema, RLS deny-by-default, RPC authorization/idempotency/concurrency, public-view projection boundaries, migration audit trail. Suites live in `supabase/tests/`. |
-| End-to-end (Playwright) | `npm run test:e2e` (wraps `playwright test`) | OAuth-stub sign-in/onboarding, tournament lifecycle, leaderboard/history, no-financial-UI-in-production, and the routing threat matrix (`e2e/session-routing.spec.js`: token expiry, direct-URL access, forged role claims, hostile redirect targets). All specs stub the network boundary — no real Google/Supabase call is ever made. |
+All Web3 transactions run on the **Polygon Amoy Testnet** using free test tokens.
 
-CI (`.github/workflows/ci.yml`) runs all of the above as one strict
-sequential gate chain: frozen install → lint → unit tests (with
-coverage) → Supabase migrations/RLS/pgTAP → build → Playwright → `npm
-audit`. Any failure blocks every step after it.
+1. **Get Testnet POL (Gas)**:
+   - Visit the official [Polygon Faucet](https://faucet.polygon.technology/) or [Alchemy Amoy Faucet](https://alchemy.com/faucets/polygon-amoy).
+   - Enter your wallet address to receive free test POL for gas fees.
+2. **Connect Wallet**:
+   - Open your browser with a wallet extension (**MetaMask**, **Rabby**, or **Coinbase Wallet**).
+   - Set network to **Polygon Amoy Testnet** (Chain ID `80002`).
 
-## Migration and rollback runbook
+---
 
-Migrations live in `supabase/migrations/`, numbered and applied in
-order. Locally:
+## 💻 Local Development
 
 ```bash
-supabase db reset   # replays every migration from a clean database
+npm ci                 # Frozen install
+npm run dev             # Start Vite development server (http://localhost:5173)
+npm run lint            # Run oxlint linter
+npm run test            # Run Vitest unit & repository test suite
+npm run build           # Production bundle build
+npm run preview         # Preview local production build (http://localhost:4173)
 ```
 
-**Rollback policy** (see `design.md` "Security, Observability, and
-Rollout"): migrations are additive. There is no automatic "down"
-migration path for anything past the schema-definition stage —
-prefer a forward-fixing migration that corrects the issue while
-preserving every existing row and audit record. A tested rollback
-`DROP`/`ALTER` is acceptable **only** before a migration has taken any
-real write in production (i.e. it shipped but nothing depends on it
-yet); once real rows exist, restore from a point-in-time backup instead
-of dropping objects that data depends on.
+---
 
-Adapter-level rollback (not a database rollback) is the primary
-incident-response tool: an authorized operator sets `VITE_FEATURE_*` or
-`VITE_DEMO_FINANCIAL_UI` to `false` and redeploys the client — the
-declared safe path is the truthful `UNAVAILABLE` state (there is no
-fixture fallback for identity/tournaments/ratings; see
-`docs/legacy-retirement.md`). Every such flag-driven denial and every
-adapter-dependency error is recorded in the append-only `migration_events`
-table (`supabase/migrations/0014_migration_audit.sql`), readable only by
-an `admin`-role account, for later reconciliation.
+## 🧪 Testing Architecture & CI Pipeline
 
-## Admin bootstrap procedure
+The project enforces a 100% passing 9-job CI gate chain in `.github/workflows/ci.yml`:
 
-The first `admin` role grant is **not** a runtime or in-app action. It is
-a one-time SQL migration (`supabase/migrations/0002_admin_bootstrap.sql`)
-that grants `admin` to a fixed maintainer email
-(`lleonalmaza@gmail.com`) if — and only if — that email has already
-signed in at least once (so the corresponding `auth.users` row exists).
-There is deliberately no runtime endpoint, JWT-claim grant, or
-environment-variable allowlist path for granting roles — see
-`proposal.md` "First admin bootstrap" and `design.md` "Browser writes vs
-commands".
+| Layer | Command | Scope & Coverage |
+|---|---|---|
+| **Unit & Repositories** | `npm run test` | Vitest + React Testing Library + V8 coverage (81.6%+ lines). |
+| **Postgres / pgTAP** | `npm run test:db` (`supabase test db`) | 16 pgTAP suites (144 assertions) covering RLS deny-by-default, RPC idempotency, username claim race, security alerts, and wallet cache. |
+| **End-to-End** | `npm run test:e2e` (`playwright test`) | 25 Playwright specs covering OAuth sign-in, tournament lifecycle, rating history, routing threat matrix, and Web3 flag gates. |
+| **Solidity Fuzzing** | `forge test --fuzz-runs 256` | Foundry fuzzing & invariant suite for `MarketFactory.sol` and `ResolutionAdapter.sol`. |
+| **Solidity Static Analysis** | `slither` | Slither security analysis for reentrancy, access control, and state integrity in `contracts/`. |
+| **Quality & Audit** | `oxlint`, `npm audit` | Code style enforcement and dependency vulnerability scanning. |
 
-To apply it:
+---
 
-1. Have the fixed maintainer email sign in through the app once (so
-   `auth.users` has the row).
-2. Apply `0002_admin_bootstrap.sql` (already applied automatically as
-   part of any full `supabase db reset` / migration replay) using the
-   **service-role key**, never a browser session.
-3. Re-running the migration is safe and idempotent
-   (`on conflict (user_id, role) do nothing`) — it is not consumed or
-   invalidated by re-application.
+## 🏛️ Architecture Overview
 
-Every subsequent role grant (`organizer`, `referee`, additional
-`admin`s) is expected to go through direct database administration by
-someone who already holds `admin`, not through this bootstrap migration
-again.
+```
+                        ┌─────────────────────────┐
+                        │      React 19 SPA       │
+                        │ (Vite + Router + Wagmi) │
+                        └────────────┬────────────┘
+                                     │
+           ┌─────────────────────────┼─────────────────────────┐
+           ▼                         ▼                         ▼
+┌────────────────────┐    ┌────────────────────┐    ┌────────────────────┐
+│   Supabase Auth    │    │  Supabase Postgres │    │  Polygon Amoy CTF  │
+│  (Google + Profile)│    │  (RLS + RPCs + DB) │    │(MarketFactory.sol) │
+└────────────────────┘    └────────────────────┘    └────────────────────┘
+                                     ▲                         ▲
+                                     │                         │
+                          ┌──────────┴──────────┐   ┌──────────┴──────────┐
+                          │   Edge Functions    │   │  Relayer / Indexer  │
+                          │   (startgg-poller)  │   │  (Deno + Viem)      │
+                          └─────────────────────┘   └─────────────────────┘
+```
+
+- **Database RLS**: Every table uses strict Row-Level Security with explicit `REVOKE ALL` and role-based policy grants.
+- **Idempotency**: All state-modifying RPCs require a `p_request_id` to enforce at-most-once execution under retries.
+- **Append-only Audit**: Sensitive actions and migration events emit immutable audit records in `audit_events`, `migration_events`, and `security_alerts`.
+
+---
+
+## 📜 License
+
+MIT License.
