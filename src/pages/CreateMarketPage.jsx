@@ -18,7 +18,7 @@ const MIN_LIQUIDITY_USDC = 100n * 1_000_000n
 
 export default function CreateMarketPage() {
   const navigate = useNavigate()
-  const { isConnected, connectors, connect } = useWalletConnect()
+  const { isConnected, connectors, connect, connectError } = useWalletConnect()
   const { createMarket, isPending } = useCreateMarket()
 
   const [startggEventId, setStartggEventId] = useState('')
@@ -94,6 +94,13 @@ export default function CreateMarketPage() {
             Conectar con {connector.name}
           </button>
         ))}
+        {connectError && (
+          <p role="alert" className="text-xs text-rose-400">
+            {connectError.name === 'ProviderNotFoundError' || connectError.message?.includes('Provider not found')
+              ? 'No se detectó ninguna wallet instalada en tu navegador. Por favor instalá una extensión como MetaMask o Rabby.'
+              : connectError.message}
+          </p>
+        )}
       </div>
     )
   }
@@ -168,7 +175,7 @@ export default function CreateMarketPage() {
           />
         </div>
 
-        {error && <p className="text-xs text-rose-400">{error}</p>}
+        {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
 
         <button
           type="submit"

@@ -2,13 +2,16 @@
 // frontend calls. Mirrors contracts/src/MarketFactory.sol and
 // contracts/src/ResolutionAdapter.sol's public interface exactly — see
 // design.md "Interfaces". Addresses come from build-time env vars,
-// populated after `contracts/script/Deploy.s.sol` runs (see
-// contracts/script/Deploy.s.sol's console.log output).
+// populated after `contracts/script/Deploy.s.sol` runs.
 
-export const MARKET_FACTORY_ADDRESS = import.meta.env.VITE_MARKET_FACTORY_ADDRESS || ''
-export const RESOLUTION_ADAPTER_ADDRESS = import.meta.env.VITE_RESOLUTION_ADAPTER_ADDRESS || ''
-export const USDC_ADDRESS = import.meta.env.VITE_USDC_ADDRESS || ''
-export const CTF_ADDRESS = import.meta.env.VITE_CTF_ADDRESS || ''
+export const MARKET_FACTORY_ADDRESS =
+  import.meta.env.VITE_MARKET_FACTORY_ADDRESS || '0x0000000000000000000000000000000000000001'
+export const RESOLUTION_ADAPTER_ADDRESS =
+  import.meta.env.VITE_RESOLUTION_ADAPTER_ADDRESS || '0x0000000000000000000000000000000000000002'
+export const USDC_ADDRESS =
+  import.meta.env.VITE_USDC_ADDRESS || '0x41e94eb019c0762f9bfcf9fb1e58725bfb0e7582'
+export const CTF_ADDRESS =
+  import.meta.env.VITE_CTF_ADDRESS || '0x2b9c7b95d3f8373bfa59d7249826a79853920c75'
 
 export const MARKET_FACTORY_ABI = [
   {

@@ -56,7 +56,13 @@ export default function OnchainWalletView() {
             </button>
           ))}
         </div>
-        {connectError && <p className="text-xs text-rose-400">{connectError.message}</p>}
+        {connectError && (
+          <p role="alert" className="text-xs text-rose-400">
+            {connectError.name === 'ProviderNotFoundError' || connectError.message?.includes('Provider not found')
+              ? 'No se detectó ninguna wallet instalada en tu navegador. Por favor instalá una extensión como MetaMask o Rabby.'
+              : connectError.message}
+          </p>
+        )}
       </div>
     )
   }
