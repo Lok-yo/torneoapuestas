@@ -1,7 +1,11 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Teko', 'Arial Narrow', Impact, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  --color-lime: #b6ff3a;
+  --color-hot: #ff3d7a;
 }
 
 :root {
@@ -20,8 +24,8 @@ body,
 
 body {
   margin: 0;
-  background: #08090d;
-  color: #e4e4e7;
+  background: #07080b;
+  color: #eef1f4;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
@@ -32,20 +36,178 @@ a {
 }
 
 ::selection {
-  background: rgba(167, 139, 250, 0.35);
+  background: #b6ff3a;
+  color: #0a0c08;
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
+
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #07080b;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: #2a2c36;
-  border-radius: 999px;
+  background: #22262e;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3d4a;
+  background: #b6ff3a;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr) 300px;
+  grid-template-rows: 58px minmax(0, 1fr);
+  background:
+    radial-gradient(80% 45% at 80% -8%, rgba(182, 255, 58, 0.07), transparent 50%),
+    #07080b;
+}
+
+.shell-top {
+  grid-column: 1 / -1;
+  border-bottom: 1px solid #1b1f27;
+  background: #0b0d12;
+}
+
+.shell-left,
+.shell-right {
+  background: #0b0d12;
+  min-height: 0;
+  overflow: auto;
+}
+
+.shell-left {
+  border-right: 1px solid #1b1f27;
+}
+
+.shell-right {
+  border-left: 1px solid #1b1f27;
+}
+
+.shell-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #07080b;
+}
+
+.odds-btn {
+  min-width: 76px;
+  padding: 8px 10px;
+  border: 1px solid #2a3140;
+  background: #12151c;
+  color: #b6ff3a;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.odds-btn:hover {
+  border-color: #b6ff3a;
+  background: #b6ff3a;
+  color: #0a0c08;
+}
+
+.odds-no {
+  color: #ff3d7a;
+  border-color: #3a2230;
+}
+
+.odds-no:hover {
+  background: #ff3d7a;
+  border-color: #ff3d7a;
+  color: #fff;
+}
+
+.live-pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: #ff3d7a;
+}
+
+.cover-fallback {
+  background: linear-gradient(165deg, #1a2410, #101318);
+}
+
+.btn-lime {
+  background: #b6ff3a;
+  color: #0a0c08;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.btn-lime:hover {
+  background: #c8ff66;
+}
+
+.btn-ghost {
+  border: 1px solid #2a3140;
+  color: #eef1f4;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.btn-ghost:hover {
+  border-color: #b6ff3a;
+  color: #b6ff3a;
+}
+
+.panel {
+  border: 1px solid #1b1f27;
+  background: #0b0d12;
+}
+
+.kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #b6ff3a;
+}
+
+@media (max-width: 1180px) {
+  .shell {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+  .shell-right {
+    display: none;
+  }
+  .rail-label {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 58px minmax(0, 1fr);
+  }
+  .shell-left {
+    display: none;
+  }
+  .shell-left.open {
+    display: block;
+    position: fixed;
+    inset: 58px auto 0 0;
+    width: 228px;
+    z-index: 40;
+    border-right: 1px solid #1b1f27;
+    box-shadow: 18px 0 40px rgba(0, 0, 0, 0.65);
+  }
+  .shell-left.open .rail-label {
+    display: inline;
+  }
 }

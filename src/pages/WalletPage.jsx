@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, PlusCircle, MinusCircle, RefreshCw, AlertCircle } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, PlusCircle, MinusCircle, RefreshCw, AlertCircle, Copy, Check } from 'lucide-react'
 import { useSession } from '../auth/SessionProvider.jsx'
 import { getWallet, depositFunds, withdrawFunds, getTransactionHistory } from '../repositories/walletRepository.js'
 import { formatDateTime } from '../lib/format.js'
 import { toAppError } from '../lib/errors.js'
 import { FEATURE_FLAGS } from '../config/featureFlags.js'
 import OnchainWalletView from './onchain/OnchainWalletView.jsx'
+import { MARKET_FACTORY_ADDRESS } from '../lib/web3/contracts.js'
 
 export default function WalletPage() {
   // Repointed on-chain when FEATURE_FLAGS.web3 is on (default off — see
@@ -80,6 +81,49 @@ function ModalDialog({ labelledBy, onClose, children }) {
   )
 }
 
+function ContractStatusCard() {
+  const [copied, setCopied] = useState(false)
+  const hash = MARKET_FACTORY_ADDRESS
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(hash)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <div className="border border-[#242424] bg-[#0c0c0c] p-5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#b11226]">Red / Contrato</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-white/5 bg-black/30 p-3">
+          <p className="text-[11px] text-zinc-500">Wallet</p>
+          <p className="mt-1 text-sm font-semibold text-zinc-200">Desconectada</p>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-black/30 p-3">
+          <p className="text-[11px] text-zinc-500">Red</p>
+          <p className="mt-1 text-sm font-semibold text-[#edeae3]">Polygon Amoy</p>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-black/30 p-3">
+          <p className="text-[11px] text-zinc-500">Smart contract</p>
+          <button
+            type="button"
+            onClick={copy}
+            className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-zinc-300 hover:text-white"
+            title="Copiar hash"
+          >
+            {hash.slice(0, 6)}…{hash.slice(-4)}
+            {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LegacyWalletPage() {
   const { profile } = useSession()
   const [walletState, setWalletState] = useState({ status: 'loading', wallet: null, transactions: [], error: null })
@@ -88,6 +132,7 @@ function LegacyWalletPage() {
   const [actionError, setActionError] = useState(null)
   const [actionPending, setActionPending] = useState(false)
   const [activeModal, setActiveModal] = useState(null) // 'deposit' | 'withdraw' | null
+  const [mode, setMode] = useState('tcred')
 
   const loadData = async () => {
     setWalletState((prev) => ({ ...prev, status: 'loading', error: null }))
@@ -192,9 +237,10 @@ function LegacyWalletPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-50">Billetera de @{profile?.username}</h1>
+          <p className="kicker">Caja</p>
+          <h1 className="mt-1 font-display text-4xl font-bold text-white">Billetera de @{profile?.username}</h1>
           <p className="text-sm text-zinc-400">
             Libro contable y saldo auditable en tiempo real para predicciones y torneos.
           </p>
@@ -208,109 +254,164 @@ function LegacyWalletPage() {
         </button>
       </div>
 
-      {/* Saldo y Acciones */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="flex flex-col justify-between rounded-3xl border border-violet-500/20 bg-gradient-to-br from-violet-500/10 via-zinc-900 to-zinc-950 p-6 sm:col-span-2">
+      <div className="inline-flex w-fit border border-[#242424] bg-[#0c0c0c] p-1">
+        <button
+          type="button"
+          onClick={() => setMode('tcred')}
+          className={`rounded-xl px-4 py-1.5 text-xs font-bold tracking-wide transition ${
+            mode === 'tcred'
+              ? 'bg-[#b11226] text-white'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          TCRED
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('web3')}
+          className={`rounded-xl px-4 py-1.5 text-xs font-bold tracking-wide transition ${
+            mode === 'web3'
+              ? 'bg-emerald-500 text-zinc-950 shadow-[0_0_20px_-6px_rgba(16,185,129,0.9)]'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          USDC / Polygon
+        </button>
+      </div>
+
+      {mode === 'web3' ? (
+        <div className="flex flex-col gap-4">
+          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-6">
+            <p className="text-xs uppercase tracking-wider text-emerald-300">On-chain</p>
+            <h2 className="mt-1 text-lg font-semibold text-zinc-50">Billetera Web3 en espera</h2>
+            <p className="mt-2 max-w-xl text-sm text-zinc-400">
+              El panel on-chain de Polygon Amoy se activa cuando el flag Web3 está habilitado. Esta vista no
+              conecta wallets ni mueve fondos.
+            </p>
+          </div>
+          <ContractStatusCard />
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="flex flex-col justify-between border border-[#242424] bg-[#0c0c0c] p-6 sm:col-span-2">
+              <div>
+                <span className="text-xs uppercase tracking-wider text-zinc-400">Saldo Total</span>
+                <p className="mt-1 font-mono text-4xl font-bold text-zinc-50">{formatCurrency(wallet.balance)}</p>
+              </div>
+              <div className="mt-6 flex flex-wrap gap-4 border-t border-zinc-800/80 pt-4 text-sm">
+                <div>
+                  <span className="text-xs text-zinc-500">Disponible para apostar/retirar</span>
+                  <p className="font-mono font-medium text-emerald-400">{formatCurrency(wallet.available_balance)}</p>
+                </div>
+                <div>
+                  <span className="text-xs text-zinc-500">Bloqueado en apuestas</span>
+                  <p className="font-mono font-medium text-amber-400">{formatCurrency(wallet.locked_balance)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col justify-center gap-3 rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">Treasury desk</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setActionError(null)
+                  setActiveModal('deposit')
+                }}
+                className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 py-3 text-sm font-semibold text-zinc-900 hover:bg-white"
+              >
+                <PlusCircle size={18} /> Depositar Fondos
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActionError(null)
+                  setActiveModal('withdraw')
+                }}
+                className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 py-3 text-sm font-semibold text-zinc-200 hover:border-zinc-500"
+              >
+                <MinusCircle size={18} /> Retirar Fondos
+              </button>
+            </div>
+          </div>
+
+          <ContractStatusCard />
+
           <div>
-            <span className="text-xs uppercase tracking-wider text-zinc-400">Saldo Total</span>
-            <p className="mt-1 text-4xl font-bold text-zinc-50">{formatCurrency(wallet.balance)}</p>
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500">
+              Historial de Movimientos (Ledger)
+            </h2>
+            {transactions.length === 0 ? (
+              <p className="py-8 text-center text-sm text-zinc-500">Todavía no registrás operaciones en tu billetera.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-zinc-800">
+                <table className="w-full text-sm">
+                  <thead className="bg-zinc-900/80 text-left text-xs uppercase tracking-wide text-zinc-500">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 font-medium">
+                        Fecha
+                      </th>
+                      <th scope="col" className="px-4 py-3 font-medium">
+                        Tipo
+                      </th>
+                      <th scope="col" className="px-4 py-3 font-medium">
+                        Descripción
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-right font-medium">
+                        Monto
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-center font-medium">
+                        Estado
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {transactions.map((tx) => (
+                      <tr key={tx.id} className="hover:bg-zinc-900/30">
+                        <td className="px-4 py-3 text-xs text-zinc-400">{formatDateTime(tx.created_at)}</td>
+                        <td className="px-4 py-3">{getTypeBadge(tx.type)}</td>
+                        <td className="px-4 py-3 text-zinc-300">{tx.description}</td>
+                        <td
+                          className={`px-4 py-3 text-right font-medium ${
+                            tx.amount >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                          }`}
+                        >
+                          <span className="flex items-center justify-end gap-1 font-mono">
+                            {tx.amount >= 0 ? <ArrowDownRight size={14} /> : <ArrowUpRight size={14} />}
+                            {formatCurrency(tx.amount)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-400">
+                            {tx.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-          <div className="mt-6 flex flex-wrap gap-4 border-t border-zinc-800/80 pt-4 text-sm">
-            <div>
-              <span className="text-xs text-zinc-500">Disponible para apostar/retirar</span>
-              <p className="font-medium text-emerald-400">{formatCurrency(wallet.available_balance)}</p>
-            </div>
-            <div>
-              <span className="text-xs text-zinc-500">Bloqueado en apuestas</span>
-              <p className="font-medium text-amber-400">{formatCurrency(wallet.locked_balance)}</p>
-            </div>
-          </div>
-        </div>
+        </>
+      )}
 
-        <div className="flex flex-col justify-center gap-3 rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6">
-          <button
-            type="button"
-            onClick={() => {
-              setActionError(null)
-              setActiveModal('deposit')
-            }}
-            className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 py-3 text-sm font-semibold text-zinc-900 hover:bg-white"
-          >
-            <PlusCircle size={18} /> Depositar Fondos
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setActionError(null)
-              setActiveModal('withdraw')
-            }}
-            className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 py-3 text-sm font-semibold text-zinc-200 hover:border-zinc-500"
-          >
-            <MinusCircle size={18} /> Retirar Fondos
-          </button>
-        </div>
-      </div>
-
-      {/* Historial Ledger de Transacciones */}
-      <div>
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500">
-          Historial de Movimientos (Ledger)
-        </h2>
-        {transactions.length === 0 ? (
-          <p className="py-8 text-center text-sm text-zinc-500">Todavía no registrás operaciones en tu billetera.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border border-zinc-800">
-            <table className="w-full text-sm">
-              <thead className="bg-zinc-900/80 text-left text-xs uppercase tracking-wide text-zinc-500">
-                <tr>
-                  <th scope="col" className="px-4 py-3 font-medium">Fecha</th>
-                  <th scope="col" className="px-4 py-3 font-medium">Tipo</th>
-                  <th scope="col" className="px-4 py-3 font-medium">Descripción</th>
-                  <th scope="col" className="px-4 py-3 text-right font-medium">Monto</th>
-                  <th scope="col" className="px-4 py-3 text-center font-medium">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800">
-                {transactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-zinc-900/30">
-                    <td className="px-4 py-3 text-xs text-zinc-400">{formatDateTime(tx.created_at)}</td>
-                    <td className="px-4 py-3">{getTypeBadge(tx.type)}</td>
-                    <td className="px-4 py-3 text-zinc-300">{tx.description}</td>
-                    <td
-                      className={`px-4 py-3 text-right font-medium ${
-                        tx.amount >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                      }`}
-                    >
-                      <span className="flex items-center justify-end gap-1">
-                        {tx.amount >= 0 ? <ArrowDownRight size={14} /> : <ArrowUpRight size={14} />}
-                        {formatCurrency(tx.amount)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-400">
-                        {tx.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Modal Depositar */}
       {activeModal === 'deposit' && (
         <ModalDialog labelledBy="deposit-modal-title" onClose={() => setActiveModal(null)}>
           <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6">
-            <h3 id="deposit-modal-title" className="text-lg font-bold text-zinc-50">Depositar Saldo</h3>
+            <h3 id="deposit-modal-title" className="text-lg font-bold text-zinc-50">
+              Depositar Saldo
+            </h3>
             <p className="mt-1 text-xs text-zinc-400">
               Ingresá el monto a acreditar en tu cuenta para participar en mercados de predicción.
             </p>
 
             <form onSubmit={handleDeposit} className="mt-6 flex flex-col gap-4">
               <div>
-                <label htmlFor="deposit-amount-input" className="block text-xs font-medium text-zinc-400 mb-1">Monto (USD)</label>
+                <label htmlFor="deposit-amount-input" className="mb-1 block text-xs font-medium text-zinc-400">
+                  Monto (USD)
+                </label>
                 <input
                   id="deposit-amount-input"
                   type="number"
@@ -324,7 +425,7 @@ function LegacyWalletPage() {
 
               {actionError && <p className="text-xs text-rose-400">{actionError}</p>}
 
-              <div className="flex gap-3 mt-2">
+              <div className="mt-2 flex gap-3">
                 <button
                   type="button"
                   onClick={() => setActiveModal(null)}
@@ -345,18 +446,21 @@ function LegacyWalletPage() {
         </ModalDialog>
       )}
 
-      {/* Modal Retirar */}
       {activeModal === 'withdraw' && (
         <ModalDialog labelledBy="withdraw-modal-title" onClose={() => setActiveModal(null)}>
           <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6">
-            <h3 id="withdraw-modal-title" className="text-lg font-bold text-zinc-50">Retirar Saldo</h3>
+            <h3 id="withdraw-modal-title" className="text-lg font-bold text-zinc-50">
+              Retirar Saldo
+            </h3>
             <p className="mt-1 text-xs text-zinc-400">
               Saldo disponible actual: <strong className="text-emerald-400">{formatCurrency(wallet.available_balance)}</strong>
             </p>
 
             <form onSubmit={handleWithdraw} className="mt-6 flex flex-col gap-4">
               <div>
-                <label htmlFor="withdraw-amount-input" className="block text-xs font-medium text-zinc-400 mb-1">Monto a retirar (USD)</label>
+                <label htmlFor="withdraw-amount-input" className="mb-1 block text-xs font-medium text-zinc-400">
+                  Monto a retirar (USD)
+                </label>
                 <input
                   id="withdraw-amount-input"
                   type="number"
@@ -371,7 +475,7 @@ function LegacyWalletPage() {
 
               {actionError && <p className="text-xs text-rose-400">{actionError}</p>}
 
-              <div className="flex gap-3 mt-2">
+              <div className="mt-2 flex gap-3">
                 <button
                   type="button"
                   onClick={() => setActiveModal(null)}

@@ -1,15 +1,16 @@
 import { useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { Trophy, Wallet, LogOut, Sparkles, PlusCircle } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Wallet, LogOut, Sparkles, PlusCircle, Menu, Search } from 'lucide-react'
 import { useSession } from '../auth/SessionProvider.jsx'
 import { claimOrganizerRole } from '../repositories/tournamentRepository.js'
 import { FEATURE_FLAGS } from '../config/featureFlags.js'
 import Avatar from './Avatar.jsx'
 
-export default function Navbar() {
+export default function Navbar({ onToggleNav }) {
   const { status, profile, hasRole, signOut, refresh } = useSession()
   const navigate = useNavigate()
   const [claiming, setClaiming] = useState(false)
+  const [q, setQ] = useState('')
 
   const isAuthenticated = status === 'authenticated' && Boolean(profile?.username)
   const isOrganizerOrAdmin = hasRole('organizer') || hasRole('admin')
@@ -27,155 +28,105 @@ export default function Navbar() {
     }
   }
 
+  const submitSearch = (e) => {
+    e.preventDefault()
+    const term = q.trim()
+    if (!term) {
+      navigate('/torneos')
+      return
+    }
+    navigate(`/torneos?q=${encodeURIComponent(term)}`)
+  }
+
   return (
-    <header className="sticky top-0 z-30 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-        <div className="flex items-center gap-6">
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/20 group-hover:scale-105 transition-transform">
-              <Trophy size={18} />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-zinc-50 tracking-tight leading-none group-hover:text-violet-300 transition-colors">
-                TorneoApuestas
-              </span>
-              <span className="text-[10px] font-medium text-violet-400 leading-tight">Fighting Games & Markets</span>
-            </div>
+    <header className="flex h-[60px] items-center justify-between gap-4 px-4 md:px-6">
+      <div className="flex min-w-0 items-center gap-3">
+        <button
+          type="button"
+          className="flex h-8 w-8 items-center justify-center border border-[#2a2a2a] text-[#8a8680] md:hidden"
+          aria-label="Abrir menú"
+          onClick={onToggleNav}
+        >
+          <Menu size={16} />
+        </button>
+        <Link to="/" className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center bg-[#b6ff3a] font-display text-lg text-[#0a0c08]">
+            C
+          </span>
+          <span className="leading-none">
+            <span className="block font-display text-[26px] uppercase leading-none text-white">COLISEUM</span>
+            <span className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-[#b6ff3a] sm:block">
+              Líneas FGC
+            </span>
+          </span>
+        </Link>
+      </div>
+
+      <form onSubmit={submitSearch} className="hidden max-w-md flex-1 md:flex">
+        <label className="flex w-full items-center gap-2 border-b border-[#2a2a2a] px-1">
+          <Search size={14} className="text-[#6f6b64]" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar evento, juego, jugador…"
+            className="h-8 w-full bg-transparent text-[13px] text-[#efece6] outline-none placeholder:text-[#5a5650]"
+          />
+        </label>
+      </form>
+
+      <div className="flex items-center gap-2">
+        {FEATURE_FLAGS.web3 && (
+          <Link
+            to="/mercados/nuevo"
+            className="hidden items-center gap-1 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#8a8680] hover:text-[#c6a46a] sm:inline-flex"
+          >
+            <PlusCircle size={12} />
+            Crear Mercado
           </Link>
+        )}
 
-          <nav className="hidden items-center gap-1.5 text-xs font-semibold text-zinc-400 sm:flex">
-            <NavLink
-              to="/"
-              end
-              className={({ isActive }) =>
-                `px-3 py-1.5 rounded-xl transition ${
-                  isActive ? 'bg-zinc-800/80 text-zinc-50 shadow-inner' : 'hover:bg-zinc-900 hover:text-zinc-200'
-                }`
-              }
-            >
-              Inicio
-            </NavLink>
-            <NavLink
-              to="/torneos"
-              className={({ isActive }) =>
-                `px-3 py-1.5 rounded-xl transition ${
-                  isActive ? 'bg-zinc-800/80 text-zinc-50 shadow-inner' : 'hover:bg-zinc-900 hover:text-zinc-200'
-                }`
-              }
-            >
-              Torneos
-            </NavLink>
-            <NavLink
-              to="/ranking"
-              className={({ isActive }) =>
-                `px-3 py-1.5 rounded-xl transition ${
-                  isActive ? 'bg-zinc-800/80 text-zinc-50 shadow-inner' : 'hover:bg-zinc-900 hover:text-zinc-200'
-                }`
-              }
-            >
-              Ranking
-            </NavLink>
+        {isAuthenticated && !isOrganizerOrAdmin && (
+          <button
+            type="button"
+            onClick={handleClaimOrganizer}
+            disabled={claiming}
+            aria-busy={claiming}
+            className="hidden items-center gap-1 border border-[#2a3140] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#b6ff3a] hover:bg-[#b6ff3a] hover:text-[#0a0c08] disabled:opacity-50 lg:inline-flex"
+            title="Obtener rol de organizador para administrar torneos"
+          >
+            <Sparkles size={12} />
+            {claiming ? 'Activando…' : 'Ser Organizador'}
+          </button>
+        )}
 
-            {FEATURE_FLAGS.web3 && (
-              <NavLink
-                to="/mercados/nuevo"
-                className={({ isActive }) =>
-                  `inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-violet-300 font-bold transition ${
-                    isActive
-                      ? 'bg-violet-500/20 border border-violet-500/40'
-                      : 'hover:bg-violet-500/10 hover:text-violet-200'
-                  }`
-                }
-              >
-                <PlusCircle size={13} />
-                Crear Mercado
-              </NavLink>
-            )}
-
-            {isAuthenticated &&
-              (isOrganizerOrAdmin ? (
-                <>
-                  <NavLink
-                    to="/organizador"
-                    className={({ isActive }) =>
-                      `px-3 py-1.5 rounded-xl transition ${
-                        isActive
-                          ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
-                          : 'hover:bg-zinc-900 hover:text-zinc-200'
-                      }`
-                    }
-                  >
-                    Panel organizador
-                  </NavLink>
-                  {hasRole('admin') && (
-                    <NavLink
-                      to="/admin"
-                      className={({ isActive }) =>
-                        `px-3 py-1.5 rounded-xl transition ${
-                          isActive
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                            : 'text-amber-400/90 hover:bg-amber-500/10 hover:text-amber-300'
-                        }`
-                      }
-                    >
-                      Admin
-                    </NavLink>
-                  )}
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleClaimOrganizer}
-                  disabled={claiming}
-                  aria-busy={claiming}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-violet-500/10 border border-violet-500/30 text-xs font-semibold text-violet-300 hover:bg-violet-500/20 disabled:opacity-50 transition"
-                  title="Obtener rol de organizador para administrar torneos"
-                >
-                  <Sparkles size={12} />
-                  {claiming ? 'Activando…' : 'Ser Organizador'}
-                </button>
-              ))}
-          </nav>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {isAuthenticated ? (
-            <>
-              <Link
-                to="/wallet"
-                className="flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:border-violet-500/40 hover:bg-zinc-900 transition shadow-sm"
-              >
-                <Wallet size={14} className="text-emerald-400" />
-                <span>Billetera</span>
-              </Link>
-              <Link
-                to={`/jugadores/${profile.username}`}
-                className="flex items-center gap-2 rounded-xl p-1 hover:bg-zinc-900 transition"
-              >
-                <Avatar username={profile.username} size={28} />
-                <span className="hidden text-xs font-semibold text-zinc-200 sm:inline">
-                  @{profile.username}
-                </span>
-              </Link>
-              <button
-                type="button"
-                onClick={signOut}
-                title="Cerrar sesión"
-                aria-label="Cerrar sesión"
-                className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 transition"
-              >
-                <LogOut size={16} />
-              </button>
-            </>
-          ) : (
+        {isAuthenticated ? (
+          <>
             <Link
-              to="/login"
-              className="rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-xs font-bold !text-white shadow-md shadow-violet-500/20 hover:from-violet-500 hover:to-indigo-500 transition"
+              to="/wallet"
+              className="inline-flex items-center gap-1.5 border border-[#2a3140] px-3 py-1.5 text-[12px] font-semibold text-[#eef1f4] hover:border-[#b6ff3a]"
             >
-              Ingresar
+              <Wallet size={13} />
+              <span>Billetera</span>
             </Link>
-          )}
-        </div>
+            <Link to={`/jugadores/${profile.username}`} className="flex items-center gap-1.5 px-1">
+              <Avatar username={profile.username} size={24} />
+              <span className="hidden text-[12px] font-medium text-[#efece6] sm:inline">@{profile.username}</span>
+            </Link>
+            <button
+              type="button"
+              onClick={signOut}
+              title="Cerrar sesión"
+              aria-label="Cerrar sesión"
+              className="p-1.5 text-[#6f6b64] hover:text-[#efece6]"
+            >
+              <LogOut size={15} />
+            </button>
+          </>
+        ) : (
+          <Link to="/login" className="btn-lime px-4 py-2 text-[12px]">
+            Ingresar
+          </Link>
+        )}
       </div>
     </header>
   )

@@ -59,7 +59,10 @@ export default function OrganizerPanelPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold text-zinc-50">Panel de organizador</h1>
+      <div>
+        <p className="kicker">Backstage</p>
+        <h1 className="mt-1 font-display text-4xl font-bold text-white">Panel de organizador</h1>
+      </div>
 
       {/* Retired: tournament-creation form. Tournaments will be sourced
           from the external start.gg API instead of created here — see
@@ -72,7 +75,7 @@ export default function OrganizerPanelPage() {
       {tournaments.length === 0 && <p className="text-sm text-zinc-400">No organizás ningún torneo todavía.</p>}
       <ul className="flex flex-col gap-2">
         {tournaments.map((tournament) => (
-          <li key={tournament.id} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
+          <li key={tournament.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-3 backdrop-blur-md">
             <p className="text-sm font-medium text-zinc-100">{tournament.name}</p>
             <p className="text-xs text-zinc-500">{tournament.status}</p>
             {tournament.status === 'REGISTRATION_OPEN' && (

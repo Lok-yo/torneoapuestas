@@ -13,20 +13,21 @@ const STATUS_LABEL = {
 }
 
 const STYLES = {
-  DRAFT: 'border-zinc-600/40 bg-zinc-600/15 text-zinc-400',
-  REGISTRATION_OPEN: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300',
-  REGISTRATION_CLOSED: 'border-amber-500/40 bg-amber-500/15 text-amber-300',
-  IN_PROGRESS: 'border-rose-500/40 bg-rose-500/15 text-rose-300',
-  COMPLETED: 'border-zinc-500/40 bg-zinc-500/15 text-zinc-400',
-  CANCELLED: 'border-zinc-700/40 bg-zinc-700/15 text-zinc-500',
+  DRAFT: 'border-[#3a1218] text-[#8a8680]',
+  REGISTRATION_OPEN: 'border-[#b6ff3a]/50 text-[#b6ff3a]',
+  REGISTRATION_CLOSED: 'border-[#3a1218] text-[#8a8680]',
+  IN_PROGRESS: 'border-[#ff3d7a] text-[#ff3d7a]',
+  COMPLETED: 'border-[#3a1218] text-[#8a8680]',
+  CANCELLED: 'border-[#3a1218] text-[#5a5650]',
 }
 
 export default function TournamentStatusBadge({ status }) {
+  const isLive = status === 'IN_PROGRESS'
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${STYLES[status] ?? STYLES.DRAFT}`}
+      className={`inline-flex items-center gap-1.5 border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STYLES[status] ?? STYLES.DRAFT}`}
     >
-      {status === 'IN_PROGRESS' && <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />}
+      {isLive && <span className="live-pip" />}
       {STATUS_LABEL[status] ?? status}
     </span>
   )

@@ -1,121 +1,173 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, Wallet, PlusCircle } from 'lucide-react'
 import { GAMES } from '../data/games.js'
 import { useSession } from '../auth/SessionProvider.jsx'
 import { listTournaments } from '../repositories/tournamentRepository.js'
+import { listMarkets } from '../repositories/marketRepository.js'
 import { FEATURE_FLAGS } from '../config/featureFlags.js'
-import GameTag from '../components/GameTag.jsx'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
-import LiveBetTicker from '../components/LiveBetTicker.jsx'
+import GameCover from '../components/GameCover.jsx'
 import { useAsync } from '../lib/useAsync.js'
+
+const ACTIVE = new Set(['REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'IN_PROGRESS'])
 
 export default function HomePage() {
   const { status, profile } = useSession()
   const isAuthenticated = status === 'authenticated' && Boolean(profile?.username)
-  const { status: featuredStatus, data: allTournaments } = useAsync(() => listTournaments(), [])
-  const featuredTournaments = allTournaments?.slice(0, 3) ?? []
+  const { status: boardStatus, data: allTournaments } = useAsync(() => listTournaments(), [])
+  const { data: markets } = useAsync(() => listMarkets().catch(() => []), [])
+  const tournaments = allTournaments ?? []
+  const live = tournaments.filter((t) => t.status === 'IN_PROGRESS')
+  const featured = live[0] ?? tournaments.find((t) => ACTIVE.has(t.status)) ?? tournaments[0]
+  const featuredGame = featured ? GAMES.find((g) => g.id === featured.game_id) : GAMES[2]
+  const board = tournaments.slice(0, 8)
+  const hotLines = (markets ?? [])
+    .filter((m) => m.status === 'OPEN')
+    .slice(0, 4)
+    .map((m) => {
+      const yes = (m.market_outcomes || []).find((o) => /sí|si|yes/i.test(o.label)) || (m.market_outcomes || [])[0]
+      const no = (m.market_outcomes || []).find((o) => /^no$/i.test(o.label)) || (m.market_outcomes || [])[1]
+      return { id: m.id, question: m.question, yes, no }
+    })
 
   return (
-    <div className="flex flex-col gap-14">
-      <section className="flex flex-col items-start gap-4 rounded-3xl border border-zinc-800 bg-gradient-to-br from-violet-500/10 via-zinc-900 to-zinc-950 p-8 sm:p-12 shadow-2xl">
-        <div className="flex flex-wrap gap-2">
-          <span className="rounded-full border border-violet-500/40 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-300">
-            {FEATURE_FLAGS.web3 ? 'Torneos FGC & Mercados P2P' : 'Torneos competitivos'}
-          </span>
-          {FEATURE_FLAGS.web3 && (
-            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
-              Web3 On-Chain Habilitado
-            </span>
-          )}
-        </div>
-        <h1 className="max-w-2xl text-3xl font-bold text-zinc-50 sm:text-5xl">
-          {FEATURE_FLAGS.web3
-            ? 'Torneos de Fighting Games y Mercados P2P'
-            : 'Organiza torneos de lucha y sigue el ranking oficial'}
-        </h1>
-        <p className="max-w-xl text-zinc-400">
-          {FEATURE_FLAGS.web3
-            ? 'Sigue torneos reales, rankings de jugadores y participa en mercados descentralizados en Polygon con USDC.'
-            : 'Smash Ultimate, Melee, Street Fighter 6, Fatal Fury: City of the Wolves, Tekken 8 y Rivals of Aether II. Registro, brackets, resultados oficiales y rating por jugador.'}
-        </p>
-        <div className="flex flex-wrap gap-3 pt-2">
-          <Link
-            to="/torneos"
-            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold !text-white shadow-lg shadow-violet-500/25 hover:bg-violet-500 transition"
-          >
-            Ver torneos <ArrowRight size={16} />
-          </Link>
-          {FEATURE_FLAGS.web3 && (
-            <Link
-              to="/mercados/nuevo"
-              className="inline-flex items-center gap-2 rounded-xl border border-violet-500/50 bg-violet-500/20 px-5 py-2.5 text-sm font-bold !text-violet-200 hover:bg-violet-500/30 transition"
-            >
-              <PlusCircle size={16} /> Crear Mercado
+    <div className="flex flex-col gap-8">
+      <section className="relative min-h-[320px] overflow-hidden border border-[#1b1f27]">
+        {featuredGame?.banner && (
+          <img
+            src={featuredGame.banner}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="absolute inset-0 h-full w-full object-cover opacity-40"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#07080b] via-[#07080b]/88 to-[#07080b]/30" />
+        <div className="relative flex min-h-[320px] flex-col justify-end gap-4 p-6 md:p-8">
+          <div className="flex flex-wrap items-center gap-3 text-[11px] font-bold uppercase tracking-[0.14em] text-[#9aa3b2]">
+            <span className="text-[#b6ff3a]">Líneas abiertas</span>
+            {FEATURE_FLAGS.web3 && <span>Polygon · USDC</span>}
+            {live.length > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-[#ff3d7a]">
+                <span className="live-pip" /> {live.length} live
+              </span>
+            )}
+          </div>
+          <h1 className="max-w-3xl font-display text-5xl uppercase leading-[0.9] text-white md:text-6xl">
+            Torneos de Fighting Games y Mercados P2P
+          </h1>
+          <p className="max-w-2xl text-[15px] leading-relaxed text-[#c5cad3]">
+            Sigue torneos reales, rankings de jugadores y participa en mercados descentralizados en Polygon con USDC.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/torneos" className="btn-lime px-5 py-2.5">
+              Ver líneas
             </Link>
-          )}
-          {!isAuthenticated && (
-            <Link
-              to="/login"
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900/80 px-5 py-2.5 text-sm font-semibold !text-zinc-200 hover:border-zinc-500 hover:bg-zinc-800 transition"
-            >
-              Continuar con Google
-            </Link>
-          )}
-        </div>
-      </section>
-
-      <LiveBetTicker />
-
-      <section>
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500">Juegos</h2>
-        <div className="flex flex-wrap gap-2">
-          {GAMES.map((game) => (
-            <Link key={game.id} to={`/torneos?juego=${game.id}`}>
-              <GameTag game={game} />
-            </Link>
-          ))}
+            {featured && (
+              <Link to={`/torneos/${featured.id}`} className="btn-ghost px-5 py-2.5">
+                Evento en juego
+              </Link>
+            )}
+            {!isAuthenticated && (
+              <Link to="/login" className="btn-ghost px-5 py-2.5">
+                Continuar con Google
+              </Link>
+            )}
+            {FEATURE_FLAGS.web3 && (
+              <Link to="/mercados/nuevo" className="btn-ghost px-5 py-2.5">
+                Crear Mercado
+              </Link>
+            )}
+          </div>
         </div>
       </section>
 
+      {hotLines.length > 0 && (
+        <section className="panel">
+          <div className="flex items-center justify-between border-b border-[#1b1f27] px-4 py-3">
+            <p className="kicker">Hot</p>
+            <span className="font-mono text-[11px] text-[#6b7380]">{hotLines.length} abiertas</span>
+          </div>
+          <ul>
+            {hotLines.map((line) => (
+              <li key={line.id} className="border-b border-[#151922] last:border-0">
+                <Link to={`/mercados/${line.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-[#10131a]">
+                  <p className="min-w-0 flex-1 truncate text-[14px] font-medium text-white">{line.question}</p>
+                  {line.yes && (
+                    <span className="odds-btn">SÍ {Math.round(Number(line.yes.price) * 100)}</span>
+                  )}
+                  {line.no && (
+                    <span className="odds-btn odds-no">NO {Math.round(Number(line.no.price) * 100)}</span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-100">Torneos destacados</h2>
-          <Link to="/torneos" className="text-sm text-zinc-400 hover:text-zinc-200">
+        <div className="mb-3 flex items-end justify-between">
+          <h2 className="font-display text-3xl uppercase text-white">Juegos</h2>
+          <span className="text-[11px] uppercase tracking-wider text-[#6b7380]">{GAMES.length} títulos</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+          {GAMES.map((game) => {
+            const count = tournaments.filter((t) => t.game_id === game.id).length
+            const liveCount = tournaments.filter((t) => t.game_id === game.id && t.status === 'IN_PROGRESS').length
+            return (
+              <Link
+                key={game.id}
+                to={`/torneos?juego=${game.id}`}
+                className="group relative block overflow-hidden border border-[#1b1f27] hover:border-[#b6ff3a]"
+              >
+                <GameCover game={game} className="aspect-[2/3] w-full" />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent p-2">
+                  <p className="font-display text-[18px] uppercase leading-none text-white">{game.shortName}</p>
+                  <p className="mt-1 font-mono text-[10px] text-[#b6ff3a]">
+                    {boardStatus === 'ready' ? count : '—'} ev.
+                    {liveCount > 0 ? ` · ${liveCount} live` : ''}
+                  </p>
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="flex items-center justify-between border-b border-[#1b1f27] px-4 py-3">
+          <h2 className="font-display text-3xl uppercase text-white">Cartelera</h2>
+          <Link to="/torneos" className="text-[11px] font-bold uppercase tracking-wider text-[#b6ff3a]">
             Ver todos
           </Link>
         </div>
 
-        {featuredStatus === 'loading' && (
-          <p className="py-6 text-center text-sm text-zinc-500">Cargando torneos…</p>
+        {boardStatus === 'loading' && <p className="px-4 py-10 text-center text-[13px] text-[#6b7380]">Cargando torneos…</p>}
+        {boardStatus === 'error' && (
+          <p className="px-4 py-10 text-center text-[13px] text-[#ff3d7a]">No pudimos cargar los torneos destacados ahora mismo.</p>
+        )}
+        {boardStatus === 'ready' && board.length === 0 && (
+          <p className="px-4 py-10 text-center text-[13px] text-[#6b7380]">Todavía no hay torneos publicados.</p>
         )}
 
-        {featuredStatus === 'error' && (
-          <p className="py-6 text-center text-sm text-rose-400">No pudimos cargar los torneos destacados ahora mismo.</p>
-        )}
-
-        {featuredStatus === 'ready' && featuredTournaments.length === 0 && (
-          <p className="py-6 text-center text-sm text-zinc-500">Todavía no hay torneos publicados.</p>
-        )}
-
-        {featuredStatus === 'ready' && featuredTournaments.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {featuredTournaments.map((t) => {
+        {boardStatus === 'ready' && board.length > 0 && (
+          <ul>
+            {board.map((t) => {
               const game = GAMES.find((g) => g.id === t.game_id)
               return (
-                <Link
-                  key={t.id}
-                  to={`/torneos/${t.id}`}
-                  className="group flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 transition hover:border-zinc-700 hover:bg-zinc-900"
-                >
-                  <div className="flex items-center justify-between">
-                    {game && <GameTag game={game} />}
+                <li key={t.id} className="border-b border-[#151922] last:border-0">
+                  <Link to={`/torneos/${t.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-[#10131a]">
+                    {game && <GameCover game={game} className="h-14 w-10 shrink-0" />}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[14px] font-semibold text-white">{t.name}</p>
+                      <p className="text-[12px] text-[#6b7380]">{game?.shortName ?? t.game_id}</p>
+                    </div>
                     <TournamentStatusBadge status={t.status} />
-                  </div>
-                  <h3 className="text-lg font-semibold text-zinc-50 group-hover:text-white">{t.name}</h3>
-                </Link>
+                    <span className="odds-btn hidden sm:inline-block">ABRIR</span>
+                  </Link>
+                </li>
               )
             })}
-          </div>
+          </ul>
         )}
       </section>
     </div>

@@ -50,16 +50,15 @@ export default function OnboardingUsernamePage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-sm flex-col gap-6 rounded-3xl border border-zinc-800 bg-zinc-900/50 p-8">
+    <div className="mx-auto mt-12 flex max-w-sm flex-col gap-6 border border-[#242424] bg-[#0c0c0c] p-8">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-50">Elegí tu usuario</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Así te van a ver otros jugadores en torneos y en el ranking.
-        </p>
+        <p className="kicker">Cuenta</p>
+        <h1 className="mt-1 font-display text-4xl font-bold text-white">Elegí tu usuario</h1>
+        <p className="mt-1 text-sm text-[#8a8680]">Así te van a ver otros jugadores en torneos y en el ranking.</p>
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <div className="flex items-center rounded-lg border border-zinc-800 bg-zinc-950 px-3">
-          <span className="text-zinc-500">@</span>
+        <div className="flex items-center border border-[#242424] bg-[#050505] px-3">
+          <span className="text-[#6f6b64]">@</span>
           <input
             autoFocus
             value={value}
@@ -68,14 +67,14 @@ export default function OnboardingUsernamePage() {
               setError(null)
             }}
             placeholder="tu_usuario"
-            className="w-full bg-transparent px-2 py-2.5 text-sm text-zinc-100 outline-none"
+            className="w-full bg-transparent px-2 py-2.5 text-sm text-[#edeae3] outline-none"
           />
         </div>
-        {error && <p className="text-xs text-rose-400">{error}</p>}
+        {error && <p className="text-xs text-[#b11226]">{error}</p>}
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-zinc-100 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-white disabled:opacity-60"
+          className="btn-lime py-2.5 disabled:opacity-60"
         >
           {pending ? 'Guardando…' : 'Continuar'}
         </button>
