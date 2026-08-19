@@ -15,6 +15,7 @@ import { MARKET_FACTORY_ADDRESS } from '../lib/web3/contracts.js'
 import { translateError } from '../lib/web3/translateError.js'
 import { checkDuplicateMarket } from '../repositories/tournamentRepository.js'
 import TournamentSearchCombobox from '../components/TournamentSearchCombobox.jsx'
+import ErrorBoundary from '../components/ErrorBoundary.jsx'
 import ManualEventIdInput from '../components/ManualEventIdInput.jsx'
 import MarketPreview from '../components/MarketPreview.jsx'
 
@@ -169,13 +170,15 @@ export default function CreateMarketPage() {
           <label className="text-xs font-medium text-zinc-400">Evento de start.gg</label>
 
           {!useManualInput ? (
-            <TournamentSearchCombobox
-              onSelect={(t) => {
-                setSelectedTournament(t)
-                setError(null)
-              }}
-              disabled={isPending}
-            />
+            <ErrorBoundary>
+              <TournamentSearchCombobox
+                onSelect={(t) => {
+                  setSelectedTournament(t)
+                  setError(null)
+                }}
+                disabled={isPending}
+              />
+            </ErrorBoundary>
           ) : (
             <ManualEventIdInput
               value={manualEventId}

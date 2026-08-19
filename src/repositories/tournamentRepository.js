@@ -197,6 +197,7 @@ export async function searchTournaments(query) {
 
   if (error) {
     if (isMissingColumnError(error, 'startgg_event_id')) {
+      console.warn('[tournamentRepository] searchTournaments: column missing, retrying without startgg_event_id', { query, error: error.message })
       const retry = await supabase
         .from('tournaments')
         .select(TOURNAMENT_FIELDS_FALLBACK)
@@ -252,7 +253,10 @@ export async function listTournamentSets(tournamentId) {
     .order('slot')
 
   if (error) {
-    if (String(error.message ?? '').includes('does not exist')) return []
+    if (String(error.message ?? '').includes('does not exist')) {
+      console.warn('[tournamentRepository] listTournamentSets: view/column missing, returning []', { tournamentId, error: error.message })
+      return []
+    }
     throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
   }
   return data ?? []

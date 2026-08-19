@@ -17,6 +17,7 @@ import GameTag from '../components/GameTag.jsx'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
 import TournamentPredictionWidget from '../components/TournamentPredictionWidget.jsx'
 import BracketSection from '../components/BracketSection.jsx'
+import ErrorBoundary from '../components/ErrorBoundary.jsx'
 import { toAppError } from '../lib/errors.js'
 
 const CreateMarketModal = lazy(() => import('../components/CreateMarketModal.jsx'))
@@ -123,10 +124,12 @@ export default function TournamentDetailPage() {
           {tab === 'descripcion' && <div id="panel-descripcion" role="tabpanel" aria-labelledby="tab-descripcion"><DescriptionPanel tournament={state.tournament} format={state.format} /></div>}
           {tab === 'brackets' && (
             <div id="panel-brackets" role="tabpanel" aria-labelledby="tab-brackets">
-              <BracketSection
-                tournamentId={state.tournament.id}
-                onSelectSet={setSelectedSet}
-              />
+              <ErrorBoundary>
+                <BracketSection
+                  tournamentId={state.tournament.id}
+                  onSelectSet={setSelectedSet}
+                />
+              </ErrorBoundary>
             </div>
           )}
           {tab === 'predicciones' && (
