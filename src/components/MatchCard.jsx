@@ -25,7 +25,7 @@ export default function MatchCard({ set: s, onSelect, disabled, hasMarket }) {
   const isPending = s.state === 'PENDING' || s.state === 'IN_PROGRESS'
 
   return (
-    <div className="border border-zinc-800 bg-zinc-900/50">
+    <div className="border border-zinc-800 bg-zinc-900/50 transition-colors duration-150">
       <div className="flex items-center justify-between border-b border-zinc-800 px-2.5 py-1.5">
         <span className={`truncate text-[13px] ${aWins ? 'font-semibold text-emerald-400' : 'text-zinc-100'}`}>
           {nameA}
@@ -61,7 +61,7 @@ export default function MatchCard({ set: s, onSelect, disabled, hasMarket }) {
           <button
             type="button"
             onClick={() => onSelect?.(s)}
-            className="w-full px-2 py-1 text-center font-mono text-[10px] uppercase text-violet-400 hover:bg-violet-950/30 hover:text-violet-300"
+            className="w-full px-2 py-1 text-center font-mono text-[10px] uppercase text-violet-400 transition-colors duration-150 hover:bg-violet-950/30 hover:text-violet-300"
           >
             Apostar
           </button>

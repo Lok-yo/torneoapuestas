@@ -59,7 +59,19 @@ export default function TournamentsPage() {
         ))}
       </div>
 
-      {status === 'loading' && <p className="py-10 text-center text-[13px] text-[#6f6b64]">Cargando torneos…</p>}
+      {status === 'loading' && (
+        <div className="border border-[#242424]">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex items-center gap-3 border-b border-[#1a1a1a] px-4 py-3 last:border-0">
+              <div className="h-14 w-10 animate-pulse bg-zinc-800" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-2/3 animate-pulse rounded bg-zinc-800" />
+                <div className="h-3 w-1/3 animate-pulse rounded bg-zinc-800" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {status === 'error' && (
         <p className="py-10 text-center text-[13px] text-[#b11226]">

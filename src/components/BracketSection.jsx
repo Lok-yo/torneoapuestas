@@ -17,7 +17,17 @@ export default function BracketSection({ tournamentId, onSelectSet, disabled }) 
   const { status, data: sets, error } = useAsync(() => listTournamentSets(tournamentId), [tournamentId])
 
   if (status === 'loading') {
-    return <p className="py-8 text-center text-[13px] text-zinc-500">Cargando bracket…</p>
+    return (
+      <div className="flex gap-6 py-8">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="flex w-[220px] flex-col gap-3">
+            <div className="h-4 w-24 animate-pulse rounded bg-zinc-800" />
+            <div className="h-24 animate-pulse rounded-lg bg-zinc-800" />
+            <div className="h-24 animate-pulse rounded-lg bg-zinc-800" />
+          </div>
+        ))}
+      </div>
+    )
   }
 
   if (status === 'error') {

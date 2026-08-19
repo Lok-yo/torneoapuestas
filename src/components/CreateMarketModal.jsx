@@ -35,7 +35,7 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
 
   if (!MARKET_FACTORY_ADDRESS) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
         <div role="dialog" aria-modal="true" aria-labelledby="market-modal-title" onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl border border-amber-800/50 bg-zinc-900 p-6 text-center">
           <AlertCircle size={32} className="mx-auto mb-2 text-amber-400" />
           <p id="market-modal-title" className="text-sm text-amber-300">El contrato de mercados no está configurado en este entorno.</p>
@@ -47,7 +47,7 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
 
   if (!isConnected) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
         <div role="dialog" aria-modal="true" aria-labelledby="market-modal-title-connect" onClick={(e) => e.stopPropagation()} className="flex w-full max-w-md flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 text-center">
           <p id="market-modal-title-connect" className="text-sm text-zinc-400">Conectá tu wallet para operar en este mercado.</p>
           {connectors.map((connector) => (
@@ -116,7 +116,7 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="market-modal-title-main" onClick={(e) => e.stopPropagation()} className="flex w-full max-w-lg flex-col gap-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
         <div className="flex items-center justify-between">
           <h2 id="market-modal-title-main" className="text-lg font-semibold text-zinc-50">
