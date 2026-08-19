@@ -18,6 +18,6 @@ export default defineConfig({
     // suite that Vitest must never try to run). supabase/functions/**
     // is a separate Deno workspace (`deno test` owns *.test.ts there —
     // see tasks.md Phase 2/8-10 RED tests).
-    exclude: ['node_modules/**', 'e2e/**', 'contracts/**', 'supabase/functions/**'],
+    exclude: ['node_modules/**', 'e2e/**', 'contracts/**', 'supabase/functions/**', '.versions/**'],
   },
 })
