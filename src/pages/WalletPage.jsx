@@ -137,6 +137,16 @@ function LegacyWalletPage() {
     }
   }
 
+  function getStatusBadge(status) {
+    const map = {
+      PENDING: 'bg-amber-500/10 text-amber-400',
+      COMPLETED: 'bg-emerald-500/10 text-emerald-400',
+      CANCELLED: 'bg-zinc-500/10 text-zinc-400',
+    }
+    const cls = map[status] ?? 'bg-emerald-500/10 text-emerald-400'
+    return <span className={`rounded-full px-2 py-0.5 text-xs ${cls}`}>{status}</span>
+  }
+
   if (walletState.status === 'loading') {
     return <p className="py-12 text-center text-sm text-zinc-500">Cargando billetera…</p>
   }
@@ -242,9 +252,7 @@ function LegacyWalletPage() {
                         {formatCurrency(tx.amount)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-400">{tx.status}</span>
-                    </td>
+                    <td className="px-4 py-3 text-center">{getStatusBadge(tx.status)}</td>
                   </tr>
                 ))}
               </tbody>

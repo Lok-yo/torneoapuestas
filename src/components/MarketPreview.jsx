@@ -1,6 +1,6 @@
 import { Calendar, Gamepad2, BarChart3, Droplets } from 'lucide-react'
 import { getGameById } from '../data/games.js'
-import { formatUsdc } from '../lib/web3/format.js'
+import { formatUsdc, parseUsdc } from '../lib/web3/format.js'
 
 const MARKET_TYPE_LABEL = {
   0: 'Por partido',
@@ -49,7 +49,7 @@ export default function MarketPreview({ tournament, marketType, outcomeRef, liqu
 
         <div className="flex items-center gap-2 text-zinc-400">
           <Droplets size={14} className="shrink-0 text-emerald-500" />
-          <span>Liquidez: <span className="font-medium text-emerald-400">{Number(liquidity || 0).toFixed(2)} USDC</span></span>
+          <span>Liquidez: <span className="font-medium text-emerald-400">{formatUsdc(parseUsdc(liquidity || 0))} USDC</span></span>
         </div>
       </div>
     </div>

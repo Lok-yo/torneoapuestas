@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { useWalletConnect, useCreateMarket } from '../lib/web3/hooks.js'
 import { parseUsdc, formatUsdc } from '../lib/web3/format.js'
 import { MARKET_FACTORY_ADDRESS } from '../lib/web3/contracts.js'
+import { translateError } from '../lib/web3/translateError.js'
 import { checkDuplicateMarketBySetId } from '../repositories/tournamentRepository.js'
 import MarketPreview from './MarketPreview.jsx'
 
@@ -114,7 +115,7 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
 
       navigate(`/mercados/${questionId}`)
     } catch (err) {
-      setError(err?.shortMessage ?? err?.message ?? 'No pudimos crear el mercado.')
+      setError(translateError(err) || 'No pudimos crear el mercado.')
     }
   }
 
