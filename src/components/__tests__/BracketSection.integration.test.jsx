@@ -1,12 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
 import BracketSection from '../BracketSection.jsx'
-
-vi.mock('../../repositories/tournamentRepository.js', () => ({
-  listTournamentSets: vi.fn(),
-}))
-
-import { listTournamentSets } from '../../repositories/tournamentRepository.js'
 
 const PENDING_SETS = [
   {
@@ -31,19 +25,12 @@ const PENDING_SETS = [
   },
 ]
 
-beforeEach(() => {
-  vi.clearAllMocks()
-})
-
 describe('BracketSection integration: PENDING sets → Apostar click', () => {
-  it('renders PENDING sets with "Apostar" buttons and calls onSelectSet when clicked', async () => {
-    listTournamentSets.mockResolvedValue(PENDING_SETS)
+  it('renders PENDING sets with "Apostar" buttons and calls onSelectSet when clicked', () => {
     const onSelectSet = vi.fn()
-    render(<BracketSection tournamentId="t-ssbu" onSelectSet={onSelectSet} />)
+    render(<BracketSection tournamentId="t-ssbu" sets={PENDING_SETS} onSelectSet={onSelectSet} />)
 
-    await waitFor(() => {
-      expect(screen.getByText('Mang0')).toBeDefined()
-    })
+    expect(screen.getByText('Mang0')).toBeDefined()
 
     const apostarButtons = screen.getAllByText('Apostar')
     expect(apostarButtons).toHaveLength(2)
@@ -53,16 +40,13 @@ describe('BracketSection integration: PENDING sets → Apostar click', () => {
     expect(onSelectSet).toHaveBeenCalledWith(PENDING_SETS[0])
   })
 
-  it('does not show "Apostar" for COMPLETED sets', async () => {
-    listTournamentSets.mockResolvedValue([
+  it('does not show "Apostar" for COMPLETED sets', () => {
+    const completedSets = [
       { ...PENDING_SETS[0], state: 'COMPLETED', winner_startgg_id: null, entrant_a_startgg_id: null, entrant_b_startgg_id: null },
-    ])
-    render(<BracketSection tournamentId="t-ssbu" onSelectSet={vi.fn()} />)
+    ]
+    render(<BracketSection tournamentId="t-ssbu" sets={completedSets} onSelectSet={vi.fn()} />)
 
-    await waitFor(() => {
-      expect(screen.getByText('Mang0')).toBeDefined()
-    })
-
+    expect(screen.getByText('Mang0')).toBeDefined()
     expect(screen.queryByText('Apostar')).toBeNull()
     expect(screen.getAllByText('Finalizado').length).toBeGreaterThanOrEqual(1)
   })

@@ -1,12 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import BracketSection from '../BracketSection.jsx'
-
-vi.mock('../../repositories/tournamentRepository.js', () => ({
-  listTournamentSets: vi.fn(),
-}))
-
-import { listTournamentSets } from '../../repositories/tournamentRepository.js'
 
 const mockSets = [
   { startgg_set_id: 1, tournament_id: 't1', round: 1, slot: 1, state: 'COMPLETED', entrant_a_name: 'Alpha', entrant_b_name: 'Bravo', has_market: false },
@@ -14,19 +8,11 @@ const mockSets = [
   { startgg_set_id: 3, tournament_id: 't1', round: 2, slot: 1, state: 'PENDING', entrant_a_name: 'Alpha', entrant_b_name: 'Charlie', has_market: false },
 ]
 
-beforeEach(() => {
-  vi.clearAllMocks()
-})
-
 describe('BracketSection round grouping', () => {
-  it('renders a column per unique round, sorted ascending', async () => {
-    listTournamentSets.mockResolvedValue(mockSets)
-    render(<BracketSection tournamentId="t1" />)
+  it('renders a column per unique round, sorted ascending', () => {
+    render(<BracketSection tournamentId="t1" sets={mockSets} />)
 
-    await waitFor(() => {
-      expect(screen.getByText('Grand Finals')).toBeDefined()
-    })
-
+    expect(screen.getByText('Grand Finals')).toBeDefined()
     expect(screen.getByText('Winners Finals')).toBeDefined()
     const headings = screen.getAllByRole('heading')
     const roundHeadings = headings.map((h) => h.textContent)
@@ -35,13 +21,8 @@ describe('BracketSection round grouping', () => {
     expect(gfIdx).toBeLessThan(wfIdx)
   })
 
-  it('renders all participant names across rounds', async () => {
-    listTournamentSets.mockResolvedValue(mockSets)
-    render(<BracketSection tournamentId="t1" />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Bravo')).toBeDefined()
-    })
+  it('renders all participant names across rounds', () => {
+    render(<BracketSection tournamentId="t1" sets={mockSets} />)
 
     expect(screen.getAllByText('Alpha').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Bravo')).toBeDefined()
@@ -49,21 +30,9 @@ describe('BracketSection round grouping', () => {
     expect(screen.getByText('Delta')).toBeDefined()
   })
 
-  it('shows empty state when no sets exist', async () => {
-    listTournamentSets.mockResolvedValue([])
-    render(<BracketSection tournamentId="t1" />)
+  it('shows empty state when no sets exist', () => {
+    render(<BracketSection tournamentId="t1" sets={[]} />)
 
-    await waitFor(() => {
-      expect(screen.getByText(/bracket todavía no fue generado/)).toBeDefined()
-    })
-  })
-
-  it('shows error state when listTournamentSets rejects', async () => {
-    listTournamentSets.mockRejectedValue(new Error('network'))
-    render(<BracketSection tournamentId="t1" />)
-
-    await waitFor(() => {
-      expect(screen.getByText(/No se pudo cargar el bracket/)).toBeDefined()
-    })
+    expect(screen.getByText(/Aún no hay TOP 8/)).toBeDefined()
   })
 })

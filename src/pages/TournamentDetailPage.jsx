@@ -7,41 +7,32 @@
 // a UX affordance only — the database grants and RPCs remain the real
 // authority, so a hidden/disabled control here is never itself a security
 // boundary. See tasks.md 3.13 and tournament-operations spec.
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link, Navigate } from 'react-router-dom'
 import { ArrowLeft, Users, Swords } from 'lucide-react'
-import { getTournament, getTournamentFormat } from '../repositories/tournamentRepository.js'
+import { getTournament, getTournamentFormat, listTournamentSets } from '../repositories/tournamentRepository.js'
 import { getGameById } from '../data/games.js'
 import { useSession } from '../auth/SessionProvider.jsx'
 import GameTag from '../components/GameTag.jsx'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
 import TournamentPredictionWidget from '../components/TournamentPredictionWidget.jsx'
 import BracketSection from '../components/BracketSection.jsx'
+import CreateMarketModal from '../components/CreateMarketModal.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
 import { toAppError } from '../lib/errors.js'
-
-const CreateMarketModal = lazy(() => import('../components/CreateMarketModal.jsx'))
+import { derivePhase } from '../lib/tournamentPhase.js'
 
 const TIMELINE = [
-  { key: 'REGISTRATION_OPEN', label: 'Registro' },
-  { key: 'REGISTRATION_CLOSED', label: 'Fase de Grupos' },
-  { key: 'IN_PROGRESS', label: 'Top 8' },
-  { key: 'COMPLETED', label: 'Finalizado' },
+  { step: 1, label: 'Registro' },
+  { step: 2, label: 'Fase de Grupos' },
+  { step: 3, label: 'Top 8' },
+  { step: 4, label: 'Finalizado' },
 ]
-
-const TIMELINE_ORDER = {
-  DRAFT: 0,
-  REGISTRATION_OPEN: 1,
-  REGISTRATION_CLOSED: 2,
-  IN_PROGRESS: 3,
-  COMPLETED: 4,
-  CANCELLED: -1,
-}
 
 export default function TournamentDetailPage() {
   const { id } = useParams()
   const { status: sessionStatus, session } = useSession()
-  const [state, setState] = useState({ status: 'loading', tournament: null, format: null, error: null })
+  const [state, setState] = useState({ status: 'loading', tournament: null, format: null, sets: [], error: null })
   const [tab, setTab] = useState('descripcion')
   const [selectedSet, setSelectedSet] = useState(null)
 
@@ -51,13 +42,16 @@ export default function TournamentDetailPage() {
     try {
       const tournament = await getTournament(id)
       if (!tournament) {
-        setState({ status: 'not_found', tournament: null, format: null, error: null })
+        setState({ status: 'not_found', tournament: null, format: null, sets: [], error: null })
         return
       }
-      const format = await getTournamentFormat(tournament.format_id)
-      setState({ status: 'ready', tournament, format, error: null })
+      const [format, sets] = await Promise.all([
+        getTournamentFormat(tournament.format_id),
+        listTournamentSets(tournament.id).catch(() => []),
+      ])
+      setState({ status: 'ready', tournament, format, sets, error: null })
     } catch (rawError) {
-      setState({ status: 'error', tournament: null, format: null, error: toAppError(rawError) })
+      setState({ status: 'error', tournament: null, format: null, sets: [], error: toAppError(rawError) })
     }
   }, [id])
 
@@ -86,7 +80,7 @@ export default function TournamentDetailPage() {
       {state.status === 'ready' && (
         <>
           <TournamentHeader tournament={state.tournament} format={state.format} />
-          <StatusTimeline status={state.tournament.status} />
+          <StatusTimeline status={state.tournament.status} sets={state.sets} />
 
           {/* Retired: registration, organizer lifecycle controls,
               bracket-generation button, and the official-result submission
@@ -121,12 +115,13 @@ export default function TournamentDetailPage() {
             ))}
           </div>
 
-          {tab === 'descripcion' && <div id="panel-descripcion" role="tabpanel" aria-labelledby="tab-descripcion"><DescriptionPanel tournament={state.tournament} format={state.format} /></div>}
+          {tab === 'descripcion' && <div id="panel-descripcion" role="tabpanel" aria-labelledby="tab-descripcion"><DescriptionPanel tournament={state.tournament} format={state.format} sets={state.sets} /></div>}
           {tab === 'brackets' && (
             <div id="panel-brackets" role="tabpanel" aria-labelledby="tab-brackets">
               <ErrorBoundary>
                 <BracketSection
                   tournamentId={state.tournament.id}
+                  sets={state.sets}
                   onSelectSet={setSelectedSet}
                 />
               </ErrorBoundary>
@@ -141,19 +136,17 @@ export default function TournamentDetailPage() {
       )}
 
       {selectedSet && state.tournament && (
-        <Suspense fallback={<div className="py-12 text-center text-zinc-500">Cargando…</div>}>
-          <CreateMarketModal
-            set={selectedSet}
-            startggEventId={state.tournament.startgg_event_id}
-            onClose={() => setSelectedSet(null)}
-          />
-        </Suspense>
+        <CreateMarketModal
+          set={selectedSet}
+          startggEventId={state.tournament.startgg_event_id}
+          onClose={() => setSelectedSet(null)}
+        />
       )}
     </div>
   )
 }
 
-function StatusTimeline({ status }) {
+function StatusTimeline({ status, sets }) {
   if (status === 'CANCELLED') {
     return (
       <div className="border border-zinc-800 bg-zinc-950 px-3 py-2 text-[12px] text-zinc-500">
@@ -162,17 +155,17 @@ function StatusTimeline({ status }) {
     )
   }
 
-  const current = TIMELINE_ORDER[status] ?? 0
+  const phase = derivePhase(status, sets)
 
   return (
     <ol className="grid grid-cols-4 border border-zinc-800 bg-zinc-950">
       {TIMELINE.map((step, i) => {
         const stepIndex = i + 1
-        const done = current > stepIndex
-        const active = current === stepIndex || (status === 'DRAFT' && stepIndex === 1)
+        const done = phase && phase.step > stepIndex
+        const active = phase && phase.step === stepIndex
         return (
           <li
-            key={step.key}
+            key={step.step}
             className={`border-r border-zinc-800 px-2 py-2 last:border-r-0 ${
               active ? 'bg-rose-950 text-rose-700' : done ? 'text-rose-700' : 'text-zinc-600'
             }`}
@@ -226,8 +219,13 @@ function TournamentHeader({ tournament, format }) {
   )
 }
 
-function DescriptionPanel({ tournament, format }) {
+function DescriptionPanel({ tournament, format, sets }) {
   const game = getGameById(tournament.game_id)
+  const phase = derivePhase(tournament.status, sets)
+  const eventDate = tournament.created_at
+    ? new Date(tournament.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null
+
   return (
     <div className="border border-zinc-800 bg-zinc-950 p-4">
       <p className="font-display text-[11px] font-bold tracking-[0.16em] text-rose-700">FICHA</p>
@@ -240,6 +238,16 @@ function DescriptionPanel({ tournament, format }) {
         <div className="border border-zinc-800 px-3 py-2">
           <dt className="text-[11px] text-zinc-500">Estado</dt>
           <dd className="text-zinc-100">{tournament.status}</dd>
+        </div>
+        {phase && (
+          <div className="border border-zinc-800 px-3 py-2">
+            <dt className="text-[11px] text-zinc-500">Fase</dt>
+            <dd className="font-mono text-rose-400">{phase.label}</dd>
+          </div>
+        )}
+        <div className="border border-zinc-800 px-3 py-2">
+          <dt className="text-[11px] text-zinc-500">Fecha</dt>
+          <dd className="text-zinc-100">{eventDate ?? '—'}</dd>
         </div>
         {format && (
           <>

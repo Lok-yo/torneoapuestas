@@ -1,6 +1,4 @@
 import { Clock, GitBranch } from 'lucide-react'
-import { useAsync } from '../lib/useAsync.js'
-import { listTournamentSets } from '../repositories/tournamentRepository.js'
 import MatchCard from './MatchCard.jsx'
 
 const ROUND_LABEL = {
@@ -13,31 +11,7 @@ const ROUND_LABEL = {
   7: 'Quarterfinals',
 }
 
-export default function BracketSection({ tournamentId, onSelectSet, disabled }) {
-  const { status, data: sets, error } = useAsync(() => listTournamentSets(tournamentId), [tournamentId])
-
-  if (status === 'loading') {
-    return (
-      <div className="flex gap-6 py-8">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="flex w-[220px] flex-col gap-3">
-            <div className="h-4 w-24 animate-pulse rounded bg-zinc-800" />
-            <div className="h-24 animate-pulse rounded-lg bg-zinc-800" />
-            <div className="h-24 animate-pulse rounded-lg bg-zinc-800" />
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  if (status === 'error') {
-    return (
-      <p className="py-8 text-center text-[13px] text-rose-400">
-        No se pudo cargar el bracket. {error?.message}
-      </p>
-    )
-  }
-
+export default function BracketSection({ tournamentId, sets, onSelectSet, disabled }) {
   if (!sets || sets.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 py-10 text-center">

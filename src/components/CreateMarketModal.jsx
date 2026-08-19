@@ -34,8 +34,7 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
     ? Math.floor(new Date(s.event_starts_at).getTime() / 1000)
     : Math.floor(Date.now() / 1000) + 3600
 
-  const perMatchRefInvalid = marketType === 0 && !/(?:vs|—)/i.test(outcomeRef) && outcomeRef.length <= 8
-  const isFormInvalid = Number(seedLiquidity) < 10 || perMatchRefInvalid
+  const isFormInvalid = Number(seedLiquidity) < 10
 
   if (!MARKET_FACTORY_ADDRESS) {
     return (
@@ -104,17 +103,24 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
 
       const totalApproval = CREATION_BOND_USDC + seed
 
-      await createMarket({
-        questionId,
-        startggEventId: BigInt(startggEventId),
-        marketType,
-        seedLiquidity: seed,
-        eventStartsAt: BigInt(eventStartsAt),
-        totalApproval,
-      })
+      try {
+        await createMarket({
+          questionId,
+          startggEventId: BigInt(startggEventId),
+          marketType,
+          seedLiquidity: seed,
+          eventStartsAt: BigInt(eventStartsAt),
+          totalApproval,
+        })
+      } catch (txErr) {
+        console.error('[CreateMarketModal] createMarket failed', txErr)
+        setError(translateError(txErr) || 'La transacción falló. Verificá tu wallet y saldo USDC.')
+        return
+      }
 
       navigate(`/mercados/${questionId}`)
     } catch (err) {
+      console.error('[CreateMarketModal] handleSubmit error', err)
       setError(translateError(err) || 'No pudimos crear el mercado.')
     }
   }

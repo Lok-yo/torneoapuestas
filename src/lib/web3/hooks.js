@@ -142,12 +142,17 @@ export function useCreateMarket() {
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash: createHash })
 
   async function createMarket({ questionId, startggEventId, marketType, seedLiquidity, eventStartsAt, totalApproval }) {
-    await writeApprove({
-      address: USDC_ADDRESS,
-      abi: ERC20_ABI,
-      functionName: 'approve',
-      args: [MARKET_FACTORY_ADDRESS, totalApproval],
-    })
+    try {
+      await writeApprove({
+        address: USDC_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [MARKET_FACTORY_ADDRESS, totalApproval],
+      })
+    } catch (approveErr) {
+      console.error('[useCreateMarket] USDC approve failed', approveErr)
+      throw approveErr
+    }
     return writeCreate({
       address: MARKET_FACTORY_ADDRESS,
       abi: MARKET_FACTORY_ABI,
