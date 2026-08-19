@@ -7,7 +7,7 @@
 // Bond)".
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { PlusCircle, AlertCircle, ToggleLeft, ToggleRight } from 'lucide-react'
+import { PlusCircle, AlertCircle, ToggleLeft, ToggleRight, AlertTriangle, ExternalLink } from 'lucide-react'
 import { keccak256, encodeAbiParameters } from 'viem'
 import { useWalletConnect, useCreateMarket } from '../lib/web3/hooks.js'
 import { parseUsdc, formatUsdc } from '../lib/web3/format.js'
@@ -135,6 +135,7 @@ export default function CreateMarketPage() {
               : connectError.message}
           </p>
         )}
+        <a href="https://ethereum.org/wallets" target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"><ExternalLink size={12} />¿Qué es una wallet?</a>
       </div>
     )
   }
@@ -225,9 +226,10 @@ export default function CreateMarketPage() {
             disabled={isPending || marketType === 1}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
           />
-          <p className="mt-1 text-xs text-zinc-500">
-            Este dato queda grabado on-chain. Si es incorrecto o ambiguo, cualquier wallet puede desafiar el mercado y perderás el bono.
-          </p>
+          <div className="mt-1 flex gap-2 rounded-lg border border-amber-500/20 bg-amber-950/20 p-3">
+            <AlertTriangle size={14} className="shrink-0 text-amber-400" />
+            <p className="text-[11px] text-amber-200/80">Este mercado queda grabado on-chain de forma inmutable. Si los datos son incorrectos, cualquier wallet puede desafiar el mercado y perderás el bono de creación.</p>
+          </div>
         </div>
 
         {/* Liquidity */}
@@ -245,6 +247,9 @@ export default function CreateMarketPage() {
             disabled={isPending}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
           />
+          {Number(seedLiquidity) < 10 && seedLiquidity !== "" && (
+            <p className="mt-1 text-xs text-rose-400">Mínimo 10 USDC</p>
+          )}
         </div>
 
         {/* Preview */}
@@ -261,7 +266,7 @@ export default function CreateMarketPage() {
 
         <button
           type="submit"
-          disabled={isPending || (!useManualInput && !selectedTournament)}
+          disabled={isPending || (!useManualInput && !selectedTournament) || Number(seedLiquidity) < 10}
           className="rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
         >
           {isPending ? 'Confirmando…' : 'Crear mercado'}

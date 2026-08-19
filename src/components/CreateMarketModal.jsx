@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, AlertCircle } from 'lucide-react'
+import { X, AlertCircle, AlertTriangle, ExternalLink } from 'lucide-react'
 import { keccak256, encodeAbiParameters } from 'viem'
 import { useNavigate } from 'react-router-dom'
 import { useWalletConnect, useCreateMarket } from '../lib/web3/hooks.js'
@@ -68,6 +68,7 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
             </p>
           )}
           <button type="button" onClick={onClose} className="text-xs text-zinc-500 hover:text-zinc-300">Cerrar</button>
+          <a href="https://ethereum.org/wallets" target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"><ExternalLink size={12} />¿Qué es una wallet?</a>
         </div>
       </div>
     )
@@ -147,6 +148,9 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
               disabled={isPending}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
             />
+            {Number(seedLiquidity) < 10 && seedLiquidity !== "" && (
+              <p className="mt-1 text-xs text-rose-400">Mínimo 10 USDC</p>
+            )}
           </div>
 
           <MarketPreview
@@ -156,16 +160,16 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
             liquidity={Number(seedLiquidity || 0)}
           />
 
-          <p className="text-[11px] text-zinc-500">
-            Este mercado queda grabado on-chain de forma inmutable. Si los datos son incorrectos,
-            cualquier wallet puede desafiar el mercado y perderás el bono de creación.
-          </p>
+          <div className="flex gap-2 rounded-lg border border-amber-500/20 bg-amber-950/20 p-3">
+            <AlertTriangle size={14} className="shrink-0 text-amber-400" />
+            <p className="text-[11px] text-amber-200/80">Este mercado queda grabado on-chain de forma inmutable. Si los datos son incorrectos, cualquier wallet puede desafiar el mercado y perderás el bono de creación.</p>
+          </div>
 
           {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
 
           <button
             type="submit"
-            disabled={isPending}
+            disabled={isPending || Number(seedLiquidity) < 10}
             className="rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
           >
             {isPending ? 'Confirmando…' : 'Crear mercado'}

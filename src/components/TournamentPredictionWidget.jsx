@@ -189,15 +189,8 @@ export default function TournamentPredictionWidget({ tournamentId, isOrganizer }
       )}
 
       {filteredMarkets.length === 0 ? (
-        <div className="py-6 text-center text-xs text-zinc-400">
-          {markets.length === 0
-            ? 'Aún no hay mercados de predicción activos para este torneo.'
-            : 'No se encontraron mercados de predicción con los filtros aplicados.'}
-          {isOrganizer && markets.length === 0 && (
-            <p className="mt-1 text-zinc-500">
-              Como organizador, podés crear uno para que los espectadores apuesten por sus favoritos.
-            </p>
-          )}
+        <div className="py-6 text-center">
+          <p className="text-sm text-zinc-500">No hay mercados abiertos — creá uno desde Brackets</p>
         </div>
       ) : (
         <div className="grid gap-4">
