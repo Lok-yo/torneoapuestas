@@ -27,6 +27,13 @@ function assertConfigured() {
 
 const TOURNAMENT_FIELDS =
   'id, organizer_id, game_id, format_id, name, status, version, roster_frozen_at, startgg_event_id, created_at, updated_at'
+const TOURNAMENT_FIELDS_FALLBACK =
+  'id, organizer_id, game_id, format_id, name, status, version, roster_frozen_at, created_at, updated_at'
+
+function isMissingColumnError(error, column) {
+  const msg = String(error?.message ?? '')
+  return msg.includes(column) && msg.includes('does not exist')
+}
 
 /** Column allowlist for the public tournament_sets view (0025). */
 const TOURNAMENT_SET_FIELDS =
@@ -40,7 +47,14 @@ export async function listTournaments() {
     .select(TOURNAMENT_FIELDS)
     .order('created_at', { ascending: false })
 
-  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  if (error) {
+    if (isMissingColumnError(error, 'startgg_event_id')) {
+      const retry = await supabase.from('tournaments').select(TOURNAMENT_FIELDS_FALLBACK).order('created_at', { ascending: false })
+      if (retry.error) throw toAppError({ error: { code: 'UNAVAILABLE', message: retry.error.message } })
+      return retry.data ?? []
+    }
+    throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  }
   return data ?? []
 }
 
@@ -49,7 +63,14 @@ export async function getTournament(id) {
   assertConfigured()
   const { data, error } = await supabase.from('tournaments').select(TOURNAMENT_FIELDS).eq('id', id).maybeSingle()
 
-  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  if (error) {
+    if (isMissingColumnError(error, 'startgg_event_id')) {
+      const retry = await supabase.from('tournaments').select(TOURNAMENT_FIELDS_FALLBACK).eq('id', id).maybeSingle()
+      if (retry.error) throw toAppError({ error: { code: 'UNAVAILABLE', message: retry.error.message } })
+      return retry.data ?? null
+    }
+    throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  }
   return data ?? null
 }
 
@@ -174,7 +195,19 @@ export async function searchTournaments(query) {
     .order('name')
     .limit(10)
 
-  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  if (error) {
+    if (isMissingColumnError(error, 'startgg_event_id')) {
+      const retry = await supabase
+        .from('tournaments')
+        .select(TOURNAMENT_FIELDS_FALLBACK)
+        .or(`name.ilike.%${escaped}%,game_id.ilike.%${escaped}%`)
+        .order('name')
+        .limit(10)
+      if (retry.error) throw toAppError({ error: { code: 'UNAVAILABLE', message: retry.error.message } })
+      return retry.data ?? []
+    }
+    throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  }
   return data ?? []
 }
 
@@ -218,7 +251,10 @@ export async function listTournamentSets(tournamentId) {
     .order('round')
     .order('slot')
 
-  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  if (error) {
+    if (String(error.message ?? '').includes('does not exist')) return []
+    throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  }
   return data ?? []
 }
 
