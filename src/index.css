@@ -145,10 +145,17 @@ a {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  transition: background 150ms ease, box-shadow 150ms ease;
 }
 
 .btn-lime:hover {
   background: #c8ff66;
+  box-shadow: 0 0 20px rgba(182, 255, 58, 0.2);
+}
+
+.btn-lime:focus-visible {
+  outline: 2px solid #b6ff3a;
+  outline-offset: 2px;
 }
 
 .btn-ghost {
@@ -158,15 +165,22 @@ a {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
 }
 
 .btn-ghost:hover {
   border-color: #b6ff3a;
   color: #b6ff3a;
+  background: rgba(182, 255, 58, 0.06);
+}
+
+.btn-ghost:focus-visible {
+  outline: 2px solid #b6ff3a;
+  outline-offset: 2px;
 }
 
 .panel {
-  border: 1px solid #1b1f27;
+  border: 1px solid rgba(39, 39, 42, 0.6);
   background: #0b0d12;
 }
 

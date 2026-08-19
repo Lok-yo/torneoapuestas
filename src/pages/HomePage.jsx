@@ -31,48 +31,48 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="relative min-h-[320px] overflow-hidden border border-[#1b1f27]">
+      <section className="relative min-h-[400px] overflow-hidden border border-zinc-800/60 md:min-h-[440px]">
         {featuredGame?.banner && (
           <img
             src={featuredGame.banner}
             alt=""
             referrerPolicy="no-referrer"
-            className="absolute inset-0 h-full w-full object-cover opacity-40"
+            className="absolute inset-0 h-full w-full object-cover opacity-35"
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#07080b] via-[#07080b]/88 to-[#07080b]/30" />
-        <div className="relative flex min-h-[320px] flex-col justify-end gap-4 p-6 md:p-8">
-          <div className="flex flex-wrap items-center gap-3 text-[11px] font-bold uppercase tracking-[0.14em] text-[#9aa3b2]">
-            <span className="text-[#b6ff3a]">Líneas abiertas</span>
+        <div className="absolute inset-0 bg-gradient-to-r from-[#07080b] via-[#07080b]/90 to-[#07080b]/40" />
+        <div className="relative flex min-h-[400px] flex-col justify-end gap-6 p-8 md:min-h-[440px] md:p-12">
+          <div className="flex flex-wrap items-center gap-3 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400">
+            <span className="text-lime">Líneas abiertas</span>
             {FEATURE_FLAGS.web3 && <span>Polygon · USDC</span>}
             {live.length > 0 && (
-              <span className="inline-flex items-center gap-1.5 text-[#ff3d7a]">
+              <span className="inline-flex items-center gap-1.5 text-hot">
                 <span className="live-pip" /> {live.length} live
               </span>
             )}
           </div>
-          <h1 className="max-w-3xl font-display text-5xl uppercase leading-[0.9] text-white md:text-6xl">
+          <h1 className="max-w-3xl font-display text-5xl uppercase leading-[0.95] text-white md:text-7xl">
             Torneos de Fighting Games y Mercados P2P
           </h1>
-          <p className="max-w-2xl text-[15px] leading-relaxed text-[#c5cad3]">
+          <p className="max-w-2xl text-[15px] leading-relaxed text-zinc-400">
             Sigue torneos reales, rankings de jugadores y participa en mercados descentralizados en Polygon con USDC.
           </p>
-          <div className="flex flex-wrap gap-2">
-            <Link to="/torneos" className="btn-lime px-5 py-2.5">
+          <div className="flex flex-wrap gap-3">
+            <Link to="/torneos" className="btn-lime px-6 py-3">
               Ver líneas
             </Link>
             {featured && (
-              <Link to={`/torneos/${featured.id}`} className="btn-ghost px-5 py-2.5">
+              <Link to={`/torneos/${featured.id}`} className="btn-ghost px-6 py-3">
                 Evento en juego
               </Link>
             )}
             {!isAuthenticated && (
-              <Link to="/login" className="btn-ghost px-5 py-2.5">
+              <Link to="/login" className="btn-ghost px-6 py-3">
                 Continuar con Google
               </Link>
             )}
             {FEATURE_FLAGS.web3 && (
-              <Link to="/mercados/nuevo" className="btn-ghost px-5 py-2.5">
+              <Link to="/mercados/nuevo" className="btn-ghost px-6 py-3">
                 Crear Mercado
               </Link>
             )}
@@ -82,14 +82,14 @@ export default function HomePage() {
 
       {hotLines.length > 0 && (
         <section className="panel">
-          <div className="flex items-center justify-between border-b border-[#1b1f27] px-4 py-3">
+          <div className="flex items-center justify-between border-b border-zinc-800/60 px-4 py-3">
             <p className="kicker">Hot</p>
-            <span className="font-mono text-[11px] text-[#6b7380]">{hotLines.length} abiertas</span>
+            <span className="font-mono text-[11px] text-zinc-500">{hotLines.length} abiertas</span>
           </div>
           <ul>
             {hotLines.map((line) => (
-              <li key={line.id} className="border-b border-[#151922] last:border-0">
-                <Link to={`/mercados/${line.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-[#10131a]">
+              <li key={line.id} className="border-b border-zinc-800/40 last:border-0">
+                <Link to={`/mercados/${line.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-zinc-800/30">
                   <p className="min-w-0 flex-1 truncate text-[14px] font-medium text-white">{line.question}</p>
                   {line.yes && (
                     <span className="odds-btn">SÍ {Math.round(Number(line.yes.price) * 100)}</span>
@@ -107,7 +107,7 @@ export default function HomePage() {
       <section>
         <div className="mb-3 flex items-end justify-between">
           <h2 className="font-display text-3xl uppercase text-white">Juegos</h2>
-          <span className="text-[11px] uppercase tracking-wider text-[#6b7380]">{GAMES.length} títulos</span>
+          <span className="text-[11px] uppercase tracking-wider text-zinc-500">{GAMES.length} títulos</span>
         </div>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
           {GAMES.map((game) => {
@@ -117,12 +117,12 @@ export default function HomePage() {
               <Link
                 key={game.id}
                 to={`/torneos?juego=${game.id}`}
-                className="group relative block overflow-hidden border border-[#1b1f27] hover:border-[#b6ff3a]"
+                className="group relative block overflow-hidden border border-zinc-800/60 transition-colors duration-150 hover:border-lime"
               >
                 <GameCover game={game} className="aspect-[2/3] w-full" />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent p-2">
                   <p className="font-display text-[18px] uppercase leading-none text-white">{game.shortName}</p>
-                  <p className="mt-1 font-mono text-[10px] text-[#b6ff3a]">
+                  <p className="mt-1 font-mono text-[10px] text-lime">
                     {boardStatus === 'ready' ? count : '—'} ev.
                     {liveCount > 0 ? ` · ${liveCount} live` : ''}
                   </p>
@@ -134,19 +134,19 @@ export default function HomePage() {
       </section>
 
       <section className="panel">
-        <div className="flex items-center justify-between border-b border-[#1b1f27] px-4 py-3">
+        <div className="flex items-center justify-between border-b border-zinc-800/60 px-4 py-3">
           <h2 className="font-display text-3xl uppercase text-white">Cartelera</h2>
-          <Link to="/torneos" className="text-[11px] font-bold uppercase tracking-wider text-[#b6ff3a]">
+          <Link to="/torneos" className="text-[11px] font-bold uppercase tracking-wider text-lime">
             Ver todos
           </Link>
         </div>
 
-        {boardStatus === 'loading' && <p className="px-4 py-10 text-center text-[13px] text-[#6b7380]">Cargando torneos…</p>}
+        {boardStatus === 'loading' && <p className="px-4 py-10 text-center text-[13px] text-zinc-500">Cargando torneos…</p>}
         {boardStatus === 'error' && (
-          <p className="px-4 py-10 text-center text-[13px] text-[#ff3d7a]">No pudimos cargar los torneos destacados ahora mismo.</p>
+          <p className="px-4 py-10 text-center text-[13px] text-hot">No pudimos cargar los torneos destacados ahora mismo.</p>
         )}
         {boardStatus === 'ready' && board.length === 0 && (
-          <p className="px-4 py-10 text-center text-[13px] text-[#6b7380]">Todavía no hay torneos publicados.</p>
+          <p className="px-4 py-10 text-center text-[13px] text-zinc-500">Todavía no hay torneos publicados.</p>
         )}
 
         {boardStatus === 'ready' && board.length > 0 && (
@@ -154,12 +154,12 @@ export default function HomePage() {
             {board.map((t) => {
               const game = GAMES.find((g) => g.id === t.game_id)
               return (
-                <li key={t.id} className="border-b border-[#151922] last:border-0">
-                  <Link to={`/torneos/${t.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-[#10131a]">
+                <li key={t.id} className="border-b border-zinc-800/40 last:border-0">
+                  <Link to={`/torneos/${t.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-zinc-800/30">
                     {game && <GameCover game={game} className="h-14 w-10 shrink-0" />}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-semibold text-white">{t.name}</p>
-                      <p className="text-[12px] text-[#6b7380]">{game?.shortName ?? t.game_id}</p>
+                      <p className="text-[12px] text-zinc-500">{game?.shortName ?? t.game_id}</p>
                     </div>
                     <TournamentStatusBadge status={t.status} />
                     <span className="odds-btn hidden sm:inline-block">ABRIR</span>
