@@ -1,4 +1,4 @@
-import { GitBranch } from 'lucide-react'
+import { Clock, GitBranch } from 'lucide-react'
 import { useAsync } from '../lib/useAsync.js'
 import { listTournamentSets } from '../repositories/tournamentRepository.js'
 import MatchCard from './MatchCard.jsx'
@@ -39,7 +39,12 @@ export default function BracketSection({ tournamentId, onSelectSet, disabled }) 
   }
 
   if (!sets || sets.length === 0) {
-    return <p className="py-8 text-center text-[13px] text-zinc-500">El bracket todavía no fue generado.</p>
+    return (
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <Clock size={20} className="text-zinc-500" />
+        <p className="text-[13px] text-zinc-400">Aún no hay TOP 8 — el poller trae más cada 60s</p>
+      </div>
+    )
   }
 
   const rounds = [...new Set(sets.map((s) => s.round))].sort((a, b) => a - b)
@@ -50,11 +55,14 @@ export default function BracketSection({ tournamentId, onSelectSet, disabled }) 
         <GitBranch size={14} className="text-rose-700" />
         Árbol del bracket
       </div>
-      <div className="flex min-w-max gap-6">
+      {rounds.length > 2 && (
+        <p className="mb-2 text-center text-[11px] text-zinc-600 sm:hidden">← Desliza →</p>
+      )}
+      <div className="flex min-w-max snap-x snap-mandatory gap-6">
         {rounds.map((round) => {
           const matchSets = sets.filter((s) => s.round === round)
           return (
-            <div key={round} className="flex min-w-[220px] flex-col">
+            <div key={round} className="flex min-w-[220px] snap-start flex-col">
               <h2 className="mb-2 font-display text-[12px] font-bold uppercase tracking-[0.14em] text-zinc-500">
                 {ROUND_LABEL[round] ?? `Ronda ${round}`}
               </h2>

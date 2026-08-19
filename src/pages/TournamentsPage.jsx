@@ -88,8 +88,8 @@ export default function TournamentsPage() {
             <Trophy size={24} className="text-zinc-500" />
           </div>
           <div>
-            <p className="text-[14px] font-semibold text-zinc-300">Todavía no hay torneos</p>
-            <p className="mt-1 text-[13px] text-zinc-500">Cuando se publiquen eventos, aparecerán aquí.</p>
+            <p className="text-[14px] font-semibold text-zinc-300">Aún no hay torneos</p>
+            <p className="mt-1 text-[13px] text-zinc-500">El poller ingiere cada 60s — cuando se publiquen eventos, aparecerán aquí.</p>
           </div>
           <Link to="/" className="btn-lime mt-2 px-5 py-2.5 text-[12px]">
             Volver al inicio
