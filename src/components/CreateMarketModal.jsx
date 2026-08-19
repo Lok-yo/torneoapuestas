@@ -148,7 +148,18 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
               min="10"
               step="0.01"
               value={seedLiquidity}
-              onChange={(e) => setSeedLiquidity(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === '') { setSeedLiquidity(''); return }
+                const n = Number(v)
+                if (!isNaN(n)) setSeedLiquidity(v)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') {
+                  const n = Number(seedLiquidity)
+                  if (!isNaN(n) && n <= 10) e.preventDefault()
+                }
+              }}
               disabled={isPending}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
             />

@@ -23,6 +23,7 @@ export default function MatchCard({ set: s, onSelect, disabled, hasMarket }) {
   const aWins = isCompleted && winnerId && s.entrant_a_startgg_id && winnerId === s.entrant_a_startgg_id
   const bWins = isCompleted && winnerId && s.entrant_b_startgg_id && winnerId === s.entrant_b_startgg_id
   const isPending = s.state === 'PENDING' || s.state === 'IN_PROGRESS'
+  const canBet = !!s.entrant_a_name && !!s.entrant_b_name && isPending && !hasMarket && !disabled
 
   return (
     <div className="border border-zinc-800 bg-zinc-900/50 transition-colors duration-150">
@@ -57,7 +58,7 @@ export default function MatchCard({ set: s, onSelect, disabled, hasMarket }) {
             Mercado activo
           </Link>
         )}
-        {isPending && !hasMarket && !disabled && (
+        {canBet && (
           <button
             type="button"
             onClick={() => onSelect?.(s)}
@@ -66,9 +67,9 @@ export default function MatchCard({ set: s, onSelect, disabled, hasMarket }) {
             Apostar
           </button>
         )}
-        {isPending && !hasMarket && disabled && (
+        {isPending && !hasMarket && !canBet && (
           <div className="px-2 py-1 text-center font-mono text-[10px] uppercase text-zinc-600">
-            —
+            {disabled ? '—' : 'Esperando rival'}
           </div>
         )}
       </div>
