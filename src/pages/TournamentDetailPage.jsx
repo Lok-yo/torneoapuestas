@@ -9,14 +9,15 @@
 // boundary. See tasks.md 3.13 and tournament-operations spec.
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link, Navigate } from 'react-router-dom'
-import { ArrowLeft, Users, Swords, GitBranch } from 'lucide-react'
+import { ArrowLeft, Users, Swords } from 'lucide-react'
 import { getTournament, getTournamentFormat } from '../repositories/tournamentRepository.js'
-import { getBracket } from '../repositories/bracketRepository.js'
 import { getGameById } from '../data/games.js'
 import { useSession } from '../auth/SessionProvider.jsx'
 import GameTag from '../components/GameTag.jsx'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
 import TournamentPredictionWidget from '../components/TournamentPredictionWidget.jsx'
+import BracketSection from '../components/BracketSection.jsx'
+import CreateMarketModal from '../components/CreateMarketModal.jsx'
 import { toAppError } from '../lib/errors.js'
 
 const TIMELINE = [
@@ -39,8 +40,8 @@ export default function TournamentDetailPage() {
   const { id } = useParams()
   const { status: sessionStatus, session } = useSession()
   const [state, setState] = useState({ status: 'loading', tournament: null, format: null, error: null })
-  const [bracket, setBracket] = useState([])
   const [tab, setTab] = useState('descripcion')
+  const [selectedSet, setSelectedSet] = useState(null)
 
   const userId = sessionStatus === 'authenticated' ? session?.user?.id : null
 
@@ -51,12 +52,8 @@ export default function TournamentDetailPage() {
         setState({ status: 'not_found', tournament: null, format: null, error: null })
         return
       }
-      const [format, bracketRows] = await Promise.all([
-        getTournamentFormat(tournament.format_id),
-        getBracket(tournament.id),
-      ])
+      const format = await getTournamentFormat(tournament.format_id)
       setState({ status: 'ready', tournament, format, error: null })
-      setBracket(bracketRows)
     } catch (rawError) {
       setState({ status: 'error', tournament: null, format: null, error: toAppError(rawError) })
     }
@@ -72,14 +69,14 @@ export default function TournamentDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Link to="/torneos" className="inline-flex items-center gap-1 text-[12px] text-[#6f6b64] hover:text-[#edeae3]">
+      <Link to="/torneos" className="inline-flex items-center gap-1 text-[12px] text-zinc-500 hover:text-zinc-100">
         <ArrowLeft size={14} /> Torneos
       </Link>
 
-      {state.status === 'loading' && <p className="py-12 text-center text-[13px] text-[#6f6b64]">Cargando torneo…</p>}
+      {state.status === 'loading' && <p className="py-12 text-center text-[13px] text-zinc-500">Cargando torneo…</p>}
 
       {state.status === 'error' && (
-        <p className="py-12 text-center text-[13px] text-[#b11226]">
+        <p className="py-12 text-center text-[13px] text-rose-700">
           No pudimos cargar este torneo ahora mismo. {state.error?.message}
         </p>
       )}
@@ -97,7 +94,7 @@ export default function TournamentDetailPage() {
               bracket display below and the prediction markets widget remain
               live and unaffected. */}
 
-          <div className="flex border border-[#242424] bg-[#0c0c0c]">
+          <div className="flex border border-zinc-800 bg-zinc-950">
             {[
               { id: 'descripcion', label: 'Descripción' },
               { id: 'brackets', label: 'Brackets' },
@@ -109,8 +106,8 @@ export default function TournamentDetailPage() {
                 onClick={() => setTab(item.id)}
                 className={`flex-1 px-3 py-2 text-[12px] font-bold uppercase tracking-wide ${
                   tab === item.id
-                    ? 'bg-[#111111] text-[#b11226] shadow-[inset_0_-2px_0_#b11226]'
-                    : 'text-[#8a8680] hover:text-[#edeae3]'
+                    ? 'bg-zinc-900 text-rose-700 shadow-[inset_0_-2px_0_#be123c]'
+                    : 'text-zinc-400 hover:text-zinc-100'
                 }`}
               >
                 {item.label}
@@ -119,11 +116,24 @@ export default function TournamentDetailPage() {
           </div>
 
           {tab === 'descripcion' && <DescriptionPanel tournament={state.tournament} format={state.format} />}
-          {tab === 'brackets' && <BracketSection bracket={bracket} />}
+          {tab === 'brackets' && (
+            <BracketSection
+              tournamentId={state.tournament.id}
+              onSelectSet={setSelectedSet}
+            />
+          )}
           {tab === 'predicciones' && (
             <TournamentPredictionWidget tournamentId={state.tournament.id} isOrganizer={isOrganizer} />
           )}
         </>
+      )}
+
+      {selectedSet && state.tournament && (
+        <CreateMarketModal
+          set={selectedSet}
+          startggEventId={state.tournament.startgg_event_id}
+          onClose={() => setSelectedSet(null)}
+        />
       )}
     </div>
   )
@@ -132,7 +142,7 @@ export default function TournamentDetailPage() {
 function StatusTimeline({ status }) {
   if (status === 'CANCELLED') {
     return (
-      <div className="border border-[#242424] bg-[#0c0c0c] px-3 py-2 text-[12px] text-[#6f6b64]">
+      <div className="border border-zinc-800 bg-zinc-950 px-3 py-2 text-[12px] text-zinc-500">
         Este torneo fue cancelado.
       </div>
     )
@@ -141,7 +151,7 @@ function StatusTimeline({ status }) {
   const current = TIMELINE_ORDER[status] ?? 0
 
   return (
-    <ol className="grid grid-cols-4 border border-[#242424] bg-[#0c0c0c]">
+    <ol className="grid grid-cols-4 border border-zinc-800 bg-zinc-950">
       {TIMELINE.map((step, i) => {
         const stepIndex = i + 1
         const done = current > stepIndex
@@ -149,8 +159,8 @@ function StatusTimeline({ status }) {
         return (
           <li
             key={step.key}
-            className={`border-r border-[#242424] px-2 py-2 last:border-r-0 ${
-              active ? 'bg-[#161010] text-[#b11226]' : done ? 'text-[#b11226]' : 'text-[#5a5650]'
+            className={`border-r border-zinc-800 px-2 py-2 last:border-r-0 ${
+              active ? 'bg-rose-950 text-rose-700' : done ? 'text-rose-700' : 'text-zinc-600'
             }`}
           >
             <div className="flex items-center justify-between font-mono text-[10px] uppercase">
@@ -168,7 +178,7 @@ function StatusTimeline({ status }) {
 function TournamentHeader({ tournament, format }) {
   const game = getGameById(tournament.game_id)
   return (
-    <div className="relative overflow-hidden border border-[#242424] bg-[#0c0c0c]">
+    <div className="relative overflow-hidden border border-zinc-800 bg-zinc-950">
       {game?.banner && (
         <img
           src={game.banner}
@@ -185,7 +195,7 @@ function TournamentHeader({ tournament, format }) {
         </div>
         <h1 className="font-display text-4xl font-bold text-white">{tournament.name}</h1>
         {format && (
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[#8a8680]">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-zinc-400">
             <span className="inline-flex items-center gap-1">
               <Users size={13} />
               {format.roster_size} jugadores
@@ -205,93 +215,33 @@ function TournamentHeader({ tournament, format }) {
 function DescriptionPanel({ tournament, format }) {
   const game = getGameById(tournament.game_id)
   return (
-    <div className="border border-[#242424] bg-[#0c0c0c] p-4">
-      <p className="font-display text-[11px] font-bold tracking-[0.16em] text-[#b11226]">FICHA</p>
-      <h2 className="font-display text-xl font-bold uppercase text-[#edeae3]">Ficha del torneo</h2>
+    <div className="border border-zinc-800 bg-zinc-950 p-4">
+      <p className="font-display text-[11px] font-bold tracking-[0.16em] text-rose-700">FICHA</p>
+      <h2 className="font-display text-xl font-bold uppercase text-zinc-100">Ficha del torneo</h2>
       <dl className="mt-3 grid gap-2 text-[13px] sm:grid-cols-2">
-        <div className="border border-[#242424] px-3 py-2">
-          <dt className="text-[11px] text-[#6f6b64]">Juego</dt>
-          <dd className="text-[#edeae3]">{game?.name ?? tournament.game_id}</dd>
+        <div className="border border-zinc-800 px-3 py-2">
+          <dt className="text-[11px] text-zinc-500">Juego</dt>
+          <dd className="text-zinc-100">{game?.name ?? tournament.game_id}</dd>
         </div>
-        <div className="border border-[#242424] px-3 py-2">
-          <dt className="text-[11px] text-[#6f6b64]">Estado</dt>
-          <dd className="text-[#edeae3]">{tournament.status}</dd>
+        <div className="border border-zinc-800 px-3 py-2">
+          <dt className="text-[11px] text-zinc-500">Estado</dt>
+          <dd className="text-zinc-100">{tournament.status}</dd>
         </div>
         {format && (
           <>
-            <div className="border border-[#242424] px-3 py-2">
-              <dt className="text-[11px] text-[#6f6b64]">Formato</dt>
-              <dd className="text-[#edeae3]">{format.name ?? 'Eliminación simple'}</dd>
+            <div className="border border-zinc-800 px-3 py-2">
+              <dt className="text-[11px] text-zinc-500">Formato</dt>
+              <dd className="text-zinc-100">{format.name ?? 'Eliminación simple'}</dd>
             </div>
-            <div className="border border-[#242424] px-3 py-2">
-              <dt className="text-[11px] text-[#6f6b64]">Roster</dt>
-              <dd className="font-mono text-[#edeae3]">
+            <div className="border border-zinc-800 px-3 py-2">
+              <dt className="text-[11px] text-zinc-500">Roster</dt>
+              <dd className="font-mono text-zinc-100">
                 {format.roster_size} · BO{format.best_of}
               </dd>
             </div>
           </>
         )}
       </dl>
-    </div>
-  )
-}
-
-function BracketSection({ bracket }) {
-  if (bracket.length === 0) {
-    return <p className="py-8 text-center text-[13px] text-[#6f6b64]">El bracket todavía no fue generado.</p>
-  }
-
-  const rounds = [...new Set(bracket.map((m) => m.round))].sort((a, b) => a - b)
-
-  return (
-    <div className="overflow-x-auto border border-[#242424] bg-[#0c0c0c] p-4">
-      <div className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-[#9aa090]">
-        <GitBranch size={14} className="text-[#b11226]" />
-        Árbol del bracket
-      </div>
-      <div className="flex min-w-max gap-6">
-        {rounds.map((round) => {
-          const matches = bracket.filter((m) => m.round === round)
-          return (
-            <div key={round} className="flex min-w-[220px] flex-col">
-              <h2 className="mb-2 font-display text-[12px] font-bold uppercase tracking-[0.14em] text-[#6f6b64]">
-                Ronda {round}
-              </h2>
-              <div className="flex flex-1 flex-col justify-around gap-4" style={{ minHeight: `${Math.max(matches.length, 1) * 88}px` }}>
-                {matches.map((match) => (
-                  <MatchCard key={match.match_id} match={match} />
-                ))}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function MatchCard({ match }) {
-  const nameA = match.participant_a_username ?? 'Por definir'
-  const nameB = match.participant_b_username ?? 'Por definir'
-  const hasScore = match.games_won_a != null
-  const aWins = hasScore && match.games_won_a > match.games_won_b
-  const bWins = hasScore && match.games_won_b > match.games_won_a
-
-  return (
-    <div className="border border-[#242424] bg-[#10180f]">
-      <div className={`flex items-center justify-between border-b border-[#242424] px-2.5 py-1.5 text-[13px] ${aWins ? 'bg-[#143016] text-[#b11226]' : 'text-[#edeae3]'}`}>
-        <span className="truncate">{nameA}</span>
-        <span className="ml-3 font-mono text-[11px] text-[#8a9080]">{hasScore ? match.games_won_a : '—'}</span>
-      </div>
-      <div className={`flex items-center justify-between px-2.5 py-1.5 text-[13px] ${bWins ? 'bg-[#143016] text-[#b11226]' : 'text-[#edeae3]'}`}>
-        <span className="truncate">{nameB}</span>
-        <span className="ml-3 font-mono text-[11px] text-[#8a9080]">{hasScore ? match.games_won_b : '—'}</span>
-      </div>
-      {!hasScore && (
-        <div className="border-t border-[#242424] px-2 py-0.5 text-center font-mono text-[10px] uppercase text-[#5a5650]">
-          vs
-        </div>
-      )}
     </div>
   )
 }

@@ -2,37 +2,68 @@
 // (recommended: pg_cron + pg_net `net.http_post` on a 60s schedule, or
 // Supabase's dashboard-configured scheduled Edge Function trigger —
 // deploy-time concern, not implemented in this file). Writes directly
-// into the existing `results`/`matches` schema as the service role (no
-// human organizer session exists for ingested tournaments), so 0012's
-// rating-projection trigger and 0018's auto-resolve trigger fire exactly
-// as they would for any other write — and 0018 stays a no-op because this
-// worker never writes `public.markets` (design.md Decision 5).
+// into `public.tournament_sets` as the service role (no human organizer
+// session exists for ingested tournaments); it no longer writes
+// matches/results nor creates shadow users — those belonged to the
+// legacy bracket model, which the TOP-8 set-betting redesign replaces
+// (design.md "Poller and Data Flow", tasks.md 2.1–2.3).
 //
-// See design.md "Polling budget (~80 req/60s)", startgg-tournament-
-// ingestion spec, and backoff.ts (unit-tested separately, see
-// backoff.test.ts / tasks.md 2.5).
+// Flow per cycle: one MX tournaments query carrying each event's
+// phases → per event, pick the TOP-8 phase (exact match, then
+// final/elimination/bracket/playoff fallback) → paginated phase sets →
+// idempotent upsert of every set (future, in-progress, and completed)
+// into tournament_sets. See design.md "Polling budget (~80 req/60s)"
+// and phase.ts/sets.ts (unit-tested separately, phase.test.ts /
+// sets.test.ts / tasks.md 2.4).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { log, newRequestId } from '../_shared/log.js'
 import { computeBackoffUntil, CycleBudget, isBackingOff, laneForCycle, partitionByBudget } from './backoff.ts'
+import { pickPhase } from './phase.ts'
+import { buildSetRow, nextSlot, processSet } from './sets.ts'
 
 const STARTGG_GRAPHQL_URL = 'https://api.start.gg/gql/alpha'
 const SOURCE_KEY = 'startgg-mx-poller'
+const SETS_PER_PAGE = 25
+const MAX_SET_PAGES = 8 // 200 sets max per phase — far beyond any TOP-8 bracket
 
 interface StartggSet {
   id: string
-  state: number // start.gg numeric state; 3 = COMPLETED
+  round: number
+  state: number // start.gg numeric state; 3 = COMPLETED, 2 = IN_PROGRESS
+  startedAt: number | null
   completedAt: number | null
   winnerId: string | null
   slots: Array<{ entrant: { id: string; name: string } | null }>
+}
+
+interface StartggPhase {
+  id: string
+  name: string
+}
+
+interface StartggEvent {
+  id: string
+  startAt: number | null
+  phases?: { nodes: StartggPhase[] }
 }
 
 interface StartggTournament {
   id: string
   name: string
   countryCode: string | null
-  startAt: number | null
-  events: Array<{ id: string; sets: { nodes: StartggSet[] }; standings?: { nodes: Array<{ placement: number; entrant: { id: string; name: string } }> } }>
+  events: StartggEvent[]
+}
+
+interface PhaseSetsResponse {
+  phase?: { id: string; name: string; sets?: { nodes: StartggSet[] } }
+}
+
+class RateLimitError extends Error {
+  constructor(public readonly retryAfterSeconds?: number) {
+    super('start.gg rate limited')
+    this.name = 'RateLimitError'
+  }
 }
 
 async function startggGraphQL(query: string, variables: Record<string, unknown>, token: string): Promise<{ ok: true; data: unknown } | { ok: false; status: number; retryAfterSeconds?: number }> {
@@ -63,18 +94,13 @@ const MX_TOURNAMENTS_QUERY = /* GraphQL */ `
         id
         name
         countryCode
-        startAt
         events {
           id
-          sets(page: 1, perPage: 25, sortType: RECENT) {
+          startAt
+          phases {
             nodes {
               id
-              state
-              completedAt
-              winnerId
-              slots {
-                entrant { id name }
-              }
+              name
             }
           }
         }
@@ -83,79 +109,55 @@ const MX_TOURNAMENTS_QUERY = /* GraphQL */ `
   }
 `
 
-/** Idempotent: `get_or_create_startgg_shadow_user` — a service-role RPC
- * that upserts a shadow `auth.users` row + `startgg_entrant_links` row
- * for a start.gg entrant with no GG2 login (design.md Decision 4). */
-async function ensureShadowUser(
-  supabase: ReturnType<typeof createClient>,
-  startggEntrantId: string,
-  displayName: string,
-): Promise<string> {
-  const { data: existing } = await supabase
-    .from('startgg_entrant_links')
-    .select('user_id')
-    .eq('startgg_entrant_id', startggEntrantId)
-    .maybeSingle()
-
-  if (existing?.user_id) return existing.user_id as string
-
-  const { data: created, error: createError } = await supabase.auth.admin.createUser({
-    email: `startgg-entrant-${startggEntrantId}@shadow.gg2.local`,
-    email_confirm: true,
-    user_metadata: { startgg_entrant_id: startggEntrantId, shadow: true },
-  })
-  if (createError || !created?.user) {
-    throw new Error(`failed to create shadow user for entrant ${startggEntrantId}: ${createError?.message}`)
+const PHASE_SETS_QUERY = /* GraphQL */ `
+  query PhaseSets($phaseId: ID!, $page: Int!, $perPage: Int!) {
+    phase(id: $phaseId) {
+      id
+      name
+      sets(page: $page, perPage: $perPage, sortType: STANDARD) {
+        nodes {
+          id
+          round
+          state
+          startedAt
+          completedAt
+          winnerId
+          slots {
+            entrant { id name }
+          }
+        }
+      }
+    }
   }
+`
 
-  await supabase.from('profiles').insert({ user_id: created.user.id, display_name: displayName })
-  await supabase.from('startgg_entrant_links').insert({ startgg_entrant_id: startggEntrantId, user_id: created.user.id })
-
-  return created.user.id
-}
-
-async function processCompletedSet(
-  supabase: ReturnType<typeof createClient>,
-  tournamentId: string,
-  set: StartggSet,
-): Promise<void> {
-  if (set.state !== 3 || !set.winnerId) return // start.gg numeric state 3 = COMPLETED
-
-  const [slotA, slotB] = set.slots
-  if (!slotA?.entrant || !slotB?.entrant) return // bye/incomplete slot, skip
-
-  const userA = await ensureShadowUser(supabase, slotA.entrant.id, slotA.entrant.name)
-  const userB = await ensureShadowUser(supabase, slotB.entrant.id, slotB.entrant.name)
-
-  // Idempotency: matches/results keyed by a deterministic id derived from
-  // the start.gg set id, so a re-poll of an already-ingested set never
-  // double-inserts (mirrors event-indexer's (block_number, log_index)
-  // upsert idempotency for the same reason).
-  const matchId = await deterministicUuid(`startgg-set:${set.id}`)
-
-  const { data: existingMatch } = await supabase.from('matches').select('id').eq('id', matchId).maybeSingle()
-  if (existingMatch) return // already ingested
-
-  await supabase.from('matches').insert({
-    id: matchId,
-    tournament_id: tournamentId,
-    round: 1,
-    slot: 0,
-    status: 'READY',
-  })
-
-  const winnerUserId = set.winnerId === slotA.entrant.id ? userA : userB
-
-  await supabase.from('results').insert({
-    match_id: matchId,
-    games_won_a: set.winnerId === slotA.entrant.id ? 2 : 0,
-    games_won_b: set.winnerId === slotB.entrant.id ? 2 : 0,
-    winner_membership_id: winnerUserId,
-    submitted_by: winnerUserId,
-    ruleset_version: 1,
-    status: 'OFFICIAL',
-    request_id: matchId,
-  })
+/** Fetches all sets of one phase with bounded pagination, consuming one
+ * request-budget slot per page. Stops early on an upstream error (keeps
+ * the rest of the cycle) and throws RateLimitError on a 429 so the
+ * cycle persists backoff instead of hammering the API. */
+async function fetchPhaseSets(
+  startggToken: string,
+  phaseId: string,
+  budget: CycleBudget,
+  requestId: string,
+): Promise<StartggSet[]> {
+  const sets: StartggSet[] = []
+  for (let page = 1; page <= MAX_SET_PAGES; page++) {
+    if (!budget.tryConsume(1)) {
+      log.info({ requestId, event: 'startgg_poller.budget_exhausted', phaseId, page })
+      break
+    }
+    const result = await startggGraphQL(PHASE_SETS_QUERY, { phaseId, page, perPage: SETS_PER_PAGE }, startggToken)
+    if (!result.ok) {
+      if (result.status === 429) throw new RateLimitError(result.retryAfterSeconds)
+      log.error({ requestId, event: 'startgg_poller.phase_sets_error', phaseId, status: result.status })
+      break
+    }
+    const nodes = ((result.data as PhaseSetsResponse)?.phase?.sets?.nodes) ?? []
+    sets.push(...nodes)
+    if (nodes.length < SETS_PER_PAGE) break
+  }
+  return sets
 }
 
 async function deterministicUuid(seed: string): Promise<string> {
@@ -179,7 +181,7 @@ Deno.serve(async (req) => {
 
   // Cron-secret gate: this function ingests using the service role and
   // must never be reachable by an arbitrary anonymous caller.
-  if (cronSecret && req.headers.get('x-cron-secret') !== cronSecret) {
+  if (!cronSecret || req.headers.get('x-cron-secret') !== cronSecret) {
     return new Response(JSON.stringify({ error: 'FORBIDDEN' }), { status: 403 })
   }
 
@@ -230,30 +232,71 @@ Deno.serve(async (req) => {
   const { processed, deferred } = partitionByBudget(tournaments, budget)
 
   let ingestedSets = 0
-  for (const tournament of processed) {
-    const tournamentId = await deterministicUuid(`startgg-tournament:${tournament.id}`)
-    await supabase.from('tournaments').upsert(
-      {
-        id: tournamentId,
-        organizer_id: Deno.env.get('STARTGG_SHADOW_ORGANIZER_ID'),
-        game_id: 'ssbu',
-        format_id: '00000000-0000-0000-0000-000000000001',
-        name: tournament.name,
-        status: 'IN_PROGRESS',
-      },
-      { onConflict: 'id', ignoreDuplicates: false },
-    )
+  let skippedEvents = 0
+  try {
+    for (const tournament of processed) {
+      const tournamentId = await deterministicUuid(`startgg-tournament:${tournament.id}`)
+      const firstEventId = tournament.events?.[0]?.id ? Number(tournament.events[0].id) : null
+      await supabase.from('tournaments').upsert(
+        {
+          id: tournamentId,
+          organizer_id: Deno.env.get('STARTGG_SHADOW_ORGANIZER_ID'),
+          game_id: 'ssbu',
+          format_id: '00000000-0000-0000-0000-000000000001',
+          name: tournament.name,
+          status: 'IN_PROGRESS',
+          // tournaments.startgg_event_id (0024) backs the Create-Market
+          // combobox; a start.gg tournament may hold several events, so
+          // the first one stands in as the tournament's lookup key.
+          ...(firstEventId != null ? { startgg_event_id: firstEventId } : {}),
+        },
+        { onConflict: 'id', ignoreDuplicates: false },
+      )
 
-    for (const event of tournament.events ?? []) {
-      for (const set of event.sets?.nodes ?? []) {
-        try {
-          await processCompletedSet(supabase, tournamentId, set)
-          ingestedSets++
-        } catch (err) {
-          log.error({ requestId, event: 'startgg_poller.set_ingest_failed', setId: set.id, message: String(err) })
+      for (const event of tournament.events ?? []) {
+        const phase = pickPhase(event.phases?.nodes)
+        if (!phase) {
+          skippedEvents++
+          log.info({ requestId, event: 'startgg_poller.phase_skipped', eventId: event.id })
+          continue
+        }
+
+        const phaseSets = await fetchPhaseSets(startggToken, phase.id, budget, requestId)
+        const roundCounters = new Map<number, number>()
+        for (const set of phaseSets) {
+          try {
+            const row = buildSetRow({
+              tournamentId,
+              eventId: Number(event.id),
+              phaseId: Number(phase.id),
+              phaseName: phase.name,
+              eventStartsAt: event.startAt,
+              set,
+              slot: nextSlot(roundCounters, set.round),
+            })
+            await processSet(supabase, row)
+            ingestedSets++
+          } catch (err) {
+            log.error({ requestId, event: 'startgg_poller.set_ingest_failed', setId: set.id, message: String(err) })
+          }
         }
       }
     }
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      const backoffUntil = computeBackoffUntil({ isRateLimited: true, retryAfterSeconds: err.retryAfterSeconds })
+      await supabase.from('startgg_ingestion_cursor').upsert({
+        source_key: SOURCE_KEY,
+        last_polled_at: new Date().toISOString(),
+        last_completed_at: cursor.last_completed_at,
+        backoff_until: backoffUntil?.toISOString() ?? null,
+        cycle_requests: 0,
+      })
+      log.warn({ requestId, event: 'startgg_poller.rate_limited_mid_cycle', backoffUntil: backoffUntil?.toISOString() })
+      return new Response(JSON.stringify({ status: 'rate_limited', backoffUntil: backoffUntil?.toISOString() }), { status: 200 })
+    }
+    log.error({ requestId, event: 'startgg_poller.cycle_failed', message: String(err) })
+    return new Response(JSON.stringify({ error: 'UNAVAILABLE' }), { status: 503 })
   }
 
   await supabase.from('startgg_ingestion_cursor').upsert({
@@ -264,10 +307,17 @@ Deno.serve(async (req) => {
     cycle_requests: budget.remaining >= 0 ? 60 - budget.remaining : 60,
   })
 
-  log.info({ requestId, event: 'startgg_poller.cycle_complete', processed: processed.length, deferred: deferred.length, ingestedSets })
+  log.info({
+    requestId,
+    event: 'startgg_poller.cycle_complete',
+    processed: processed.length,
+    deferred: deferred.length,
+    skippedEvents,
+    ingestedSets,
+  })
 
   return new Response(
-    JSON.stringify({ status: 'ok', processed: processed.length, deferred: deferred.length, ingestedSets }),
+    JSON.stringify({ status: 'ok', processed: processed.length, deferred: deferred.length, skippedEvents, ingestedSets }),
     { status: 200, headers: { 'content-type': 'application/json' } },
   )
 })

@@ -7,32 +7,63 @@
 // Bond)".
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { PlusCircle, AlertCircle } from 'lucide-react'
+import { PlusCircle, AlertCircle, ToggleLeft, ToggleRight } from 'lucide-react'
 import { keccak256, encodeAbiParameters } from 'viem'
 import { useWalletConnect, useCreateMarket } from '../lib/web3/hooks.js'
 import { parseUsdc, formatUsdc } from '../lib/web3/format.js'
 import { MARKET_FACTORY_ADDRESS } from '../lib/web3/contracts.js'
+import { checkDuplicateMarket } from '../repositories/tournamentRepository.js'
+import TournamentSearchCombobox from '../components/TournamentSearchCombobox.jsx'
+import ManualEventIdInput from '../components/ManualEventIdInput.jsx'
+import MarketPreview from '../components/MarketPreview.jsx'
 
 const CREATION_BOND_USDC = 25n * 1_000_000n
-const MIN_LIQUIDITY_USDC = 100n * 1_000_000n
+const MIN_LIQUIDITY_USDC = 10n * 1_000_000n
 
 export default function CreateMarketPage() {
   const navigate = useNavigate()
   const { isConnected, connectors, connect, connectError } = useWalletConnect()
   const { createMarket, isPending } = useCreateMarket()
 
-  const [startggEventId, setStartggEventId] = useState('')
+  const [selectedTournament, setSelectedTournament] = useState(null)
+  const [manualEventId, setManualEventId] = useState('')
+  const [useManualInput, setUseManualInput] = useState(false)
   const [marketType, setMarketType] = useState(0)
   const [outcomeRef, setOutcomeRef] = useState('')
   const [seedLiquidity, setSeedLiquidity] = useState('100')
   const [error, setError] = useState(null)
 
-  const handleSubmit = async (e) => {
+  const resolvedEventId = useManualInput ? manualEventId : selectedTournament?.startgg_event_id
+
+  function toggleManualInput() {
+    setUseManualInput((prev) => !prev)
+    setSelectedTournament(null)
+    setManualEventId('')
+    setError(null)
+  }
+
+  async function handleSubmit(e) {
     e.preventDefault()
     setError(null)
 
-    if (!startggEventId || !outcomeRef) {
-      setError('Completá el evento de start.gg y la referencia del resultado.')
+    if (!resolvedEventId) {
+      setError('Seleccioná un torneo o ingresá un ID de evento manualmente.')
+      return
+    }
+
+    const ref = outcomeRef.trim()
+    if (!ref) {
+      setError('Completá la referencia del resultado.')
+      return
+    }
+
+    if (ref.length < 3) {
+      setError('La referencia debe tener al menos 3 caracteres.')
+      return
+    }
+
+    if (marketType === 0 && !/(?:vs|—)/i.test(ref) && ref.length <= 5) {
+      setError('La referencia del partido debe incluir "vs" o "—" entre los nombres, o ser más descriptiva (más de 5 caracteres).')
       return
     }
 
@@ -43,13 +74,16 @@ export default function CreateMarketPage() {
     }
 
     try {
-      // questionId = keccak256(abi.encode(startggEventId, marketType,
-      // outcomeRef)) — design.md Decision 3, matches
-      // contracts/src/MarketFactory.sol createMarket NatSpec exactly.
+      const isDuplicate = await checkDuplicateMarket(BigInt(resolvedEventId))
+      if (isDuplicate) {
+        setError('Ya existe un mercado activo para este evento. Intentá con otro.')
+        return
+      }
+
       const questionId = keccak256(
         encodeAbiParameters(
           [{ type: 'uint256' }, { type: 'uint8' }, { type: 'bytes32' }],
-          [BigInt(startggEventId), marketType, keccak256(new TextEncoder().encode(outcomeRef))],
+          [BigInt(resolvedEventId), marketType, keccak256(new TextEncoder().encode(outcomeRef.trim()))],
         ),
       )
 
@@ -58,7 +92,7 @@ export default function CreateMarketPage() {
 
       await createMarket({
         questionId,
-        startggEventId: BigInt(startggEventId),
+        startggEventId: BigInt(resolvedEventId),
         marketType,
         seedLiquidity: seed,
         eventStartsAt,
@@ -112,26 +146,49 @@ export default function CreateMarketPage() {
         <h1 className="text-xl font-semibold text-zinc-50">Crear mercado</h1>
       </div>
       <p className="mb-6 text-sm text-zinc-400">
-        Cualquier wallet puede crear un mercado sobre un evento de start.gg ya ingerido. Se requiere un bono
+        Cualquier wallet puede crear un mercado sobre un evento de start.gg. Se requiere un bono
         reembolsable de {formatUsdc(CREATION_BOND_USDC)} USDC, más al menos {formatUsdc(MIN_LIQUIDITY_USDC)} USDC de
-        liquidez inicial. Otra wallet puede desafiar el mercado como duplicado o malformado dentro de la ventana de
-        creación.
+        liquidez inicial.
       </p>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
-        <div>
-          <label htmlFor="startgg-event-id" className="mb-1 block text-xs font-medium text-zinc-400">
-            ID de evento start.gg
-          </label>
-          <input
-            id="startgg-event-id"
-            type="number"
-            value={startggEventId}
-            onChange={(e) => setStartggEventId(e.target.value)}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500"
-          />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
+
+        {/* Tournament selector */}
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-medium text-zinc-400">Evento de start.gg</label>
+
+          {!useManualInput ? (
+            <TournamentSearchCombobox
+              onSelect={(t) => {
+                setSelectedTournament(t)
+                setError(null)
+              }}
+              disabled={isPending}
+            />
+          ) : (
+            <ManualEventIdInput
+              value={manualEventId}
+              onChange={(v) => { setManualEventId(v); setError(null) }}
+              onClear={() => { setManualEventId(''); setError(null) }}
+              disabled={isPending}
+            />
+          )}
+
+          <button
+            type="button"
+            onClick={toggleManualInput}
+            className="flex w-fit items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300"
+          >
+            {useManualInput ? (
+              <ToggleRight size={16} className="text-violet-400" />
+            ) : (
+              <ToggleLeft size={16} />
+            )}
+            {useManualInput ? 'Buscar torneo en la DB' : '¿No lo encontrás? Ingresá el ID manualmente'}
+          </button>
         </div>
 
+        {/* Market type */}
         <div>
           <label htmlFor="market-type" className="mb-1 block text-xs font-medium text-zinc-400">
             Tipo de mercado
@@ -139,47 +196,72 @@ export default function CreateMarketPage() {
           <select
             id="market-type"
             value={marketType}
-            onChange={(e) => setMarketType(Number(e.target.value))}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500"
+            onChange={(e) => {
+              const val = Number(e.target.value)
+              setMarketType(val)
+              if (val === 1) setOutcomeRef('tournament-winner')
+              else if (outcomeRef === 'tournament-winner') setOutcomeRef('')
+              setError(null)
+            }}
+            disabled={isPending}
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
           >
             <option value={0}>Por partido (per-match)</option>
             <option value={1}>Ganador del torneo (per-tournament-winner)</option>
           </select>
         </div>
 
+        {/* Outcome ref */}
         <div>
           <label htmlFor="outcome-ref" className="mb-1 block text-xs font-medium text-zinc-400">
-            Referencia del resultado (jugador/partido)
+            {marketType === 0 ? '¿Qué partido se resuelve?' : 'Referencia del ganador'}
           </label>
           <input
             id="outcome-ref"
             type="text"
             value={outcomeRef}
             onChange={(e) => setOutcomeRef(e.target.value)}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500"
+            placeholder={marketType === 0 ? 'Ej: Mango vs Zain — Winners Semis' : 'Ej: Campeón del torneo'}
+            disabled={isPending || marketType === 1}
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
           />
+          <p className="mt-1 text-xs text-zinc-500">
+            Este dato queda grabado on-chain. Si es incorrecto o ambiguo, cualquier wallet puede desafiar el mercado y perderás el bono.
+          </p>
         </div>
 
+        {/* Liquidity */}
         <div>
           <label htmlFor="seed-liquidity" className="mb-1 block text-xs font-medium text-zinc-400">
-            Liquidez inicial (USDC, mínimo 100)
+            Liquidez inicial (USDC, mínimo 10)
           </label>
           <input
             id="seed-liquidity"
             type="number"
-            min="100"
+            min="10"
             step="0.01"
             value={seedLiquidity}
             onChange={(e) => setSeedLiquidity(e.target.value)}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500"
+            disabled={isPending}
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
           />
         </div>
+
+        {/* Preview */}
+        {(selectedTournament || (useManualInput && manualEventId)) && (
+          <MarketPreview
+            tournament={selectedTournament ?? { name: `Evento #${manualEventId}`, game_id: '—', created_at: null }}
+            marketType={marketType}
+            outcomeRef={outcomeRef}
+            liquidity={Number(seedLiquidity || 0)}
+          />
+        )}
 
         {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
 
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || (!useManualInput && !selectedTournament)}
           className="rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
         >
           {isPending ? 'Confirmando…' : 'Crear mercado'}

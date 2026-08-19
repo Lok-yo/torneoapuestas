@@ -11,6 +11,7 @@ import { createPublicClient, http, parseAbiItem } from 'https://esm.sh/viem@2?bu
 import { polygonAmoy } from 'https://esm.sh/viem@2/chains?bundle'
 import { log, newRequestId } from '../_shared/log.js'
 import { filterReorgSafeLogs, nextUnprocessedLogs } from './reorgGuard.ts'
+import { matchStartggSetId } from './setMatcher.ts'
 
 const MARKET_CREATED_EVENT = parseAbiItem(
   'event MarketCreated(bytes32 indexed questionId, bytes32 indexed conditionId, address indexed creator, address fpmm, uint256 startggEventId, uint8 marketType)',
@@ -79,7 +80,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'UNAVAILABLE' }), { status: 503 })
   }
 
-  if (cronSecret && req.headers.get('x-cron-secret') !== cronSecret) {
+  if (!cronSecret || req.headers.get('x-cron-secret') !== cronSecret) {
     return new Response(JSON.stringify({ error: 'FORBIDDEN' }), { status: 403 })
   }
 
@@ -159,12 +160,14 @@ async function applyEvent(supabase: ReturnType<typeof createClient>, evt: any) {
   const conditionId = evt.args?.conditionId as string | undefined
 
   switch (evt.eventName) {
-    case 'MarketCreated':
+    case 'MarketCreated': {
+      const startggEventId = Number(evt.args?.startggEventId ?? 0)
+      const marketType = Number(evt.args?.marketType ?? 0)
       await supabase.from('onchain_markets').upsert({
         condition_id: conditionId,
         question_id: questionId,
-        startgg_event_id: Number(evt.args?.startggEventId ?? 0),
-        market_type: Number(evt.args?.marketType ?? 0),
+        startgg_event_id: startggEventId,
+        market_type: marketType,
         creator_address: evt.args?.creator,
         state: 'PENDING',
         fpmm_address: evt.args?.fpmm,
@@ -177,7 +180,30 @@ async function applyEvent(supabase: ReturnType<typeof createClient>, evt: any) {
         amount: 25_000_000, // 25 USDC, 6 decimals — mirrors MarketFactory.CREATION_BOND
         state: 'LOCKED',
       })
+      // keccak is one-way, so the set key is recovered by recomputing
+      // candidate questionIds from the event's ingested sets (design.md
+      // "Identity" / tasks.md 2.5). Non-set markets (marketType=1) and
+      // unmatched events stay NULL — question ids cannot be reversed.
+      if (questionId) {
+        const { data: candidateSets } = await supabase
+          .from('tournament_sets')
+          .select('startgg_set_id')
+          .eq('startgg_event_id', startggEventId)
+        const matchedSetId = matchStartggSetId(
+          questionId,
+          startggEventId,
+          marketType,
+          (candidateSets ?? []).map((row: { startgg_set_id: number }) => row.startgg_set_id),
+        )
+        if (matchedSetId != null) {
+          await supabase
+            .from('onchain_markets')
+            .update({ startgg_set_id: Number(matchedSetId) })
+            .eq('question_id', questionId)
+        }
+      }
       break
+    }
     case 'MarketActivated':
       await supabase.from('onchain_markets').update({ state: 'ACTIVE' }).eq('question_id', questionId)
       break
