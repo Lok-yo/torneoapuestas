@@ -53,7 +53,7 @@ export default function OnchainWalletView() {
               disabled={isConnecting}
               className="rounded-xl bg-zinc-100 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-white disabled:opacity-50"
             >
-              {isConnecting ? 'Conectando…' : `Conectar con ${connector.name}`}
+              {isConnecting ? 'Conectando…' : `Conectar con ${connector.name === 'Injected' ? 'MetaMask / Rabby' : connector.name}`}
             </button>
           ))}
         </div>

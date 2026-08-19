@@ -55,7 +55,7 @@ contract MarketFactory {
 
     /// Testnet-calibrated, maintainer-adjustable per design.md Parameters
     /// table. USDC uses 6 decimals.
-    uint256 public constant CREATION_BOND = 25e6;
+    uint256 public constant CREATION_BOND = 1e6;
     uint256 public constant CHALLENGER_BOND = 25e6;
     uint256 public constant MIN_LIQUIDITY = 100e6;
     uint256 public constant MAX_CREATION_WINDOW = 60 minutes;

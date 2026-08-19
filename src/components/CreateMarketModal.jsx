@@ -6,18 +6,19 @@ import { useWalletConnect, useCreateMarket } from '../lib/web3/hooks.js'
 import { parseUsdc, formatUsdc } from '../lib/web3/format.js'
 import { MARKET_FACTORY_ADDRESS } from '../lib/web3/contracts.js'
 import { translateError } from '../lib/web3/translateError.js'
-import { checkDuplicateMarketBySetId } from '../repositories/tournamentRepository.js'
+import { checkDuplicateMarketByQuestionId } from '../repositories/tournamentRepository.js'
 import MarketPreview from './MarketPreview.jsx'
 
-const CREATION_BOND_USDC = 25n * 1_000_000n
-const MIN_LIQUIDITY_USDC = 10n * 1_000_000n
+const CREATION_BOND_USDC = 1n * 1_000_000n
+const MIN_LIQUIDITY_USDC = 1n * 1_000_000n
 
-export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
+export default function CreateMarketModal({ set: s, startggEventId: propEventId, onClose }) {
+  const startggEventId = propEventId ?? s.startgg_event_id;
   const navigate = useNavigate()
   const { isConnected, connectors, connect, connectError } = useWalletConnect()
   const { createMarket, isPending } = useCreateMarket()
 
-  const [seedLiquidity, setSeedLiquidity] = useState('100')
+  const [seedLiquidity, setSeedLiquidity] = useState('1')
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -34,7 +35,7 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
     ? Math.floor(new Date(s.event_starts_at).getTime() / 1000)
     : Math.floor(Date.now() / 1000) + 3600
 
-  const isFormInvalid = Number(seedLiquidity) < 10
+  const isFormInvalid = Number(seedLiquidity) < 1
 
   if (!MARKET_FACTORY_ADDRESS) {
     return (
@@ -43,35 +44,6 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
           <AlertCircle size={32} className="mx-auto mb-2 text-amber-400" />
           <p id="market-modal-title" className="text-sm text-amber-300">El contrato de mercados no está configurado en este entorno.</p>
           <button type="button" onClick={onClose} className="mt-4 text-xs text-zinc-500 hover:text-zinc-300">Cerrar</button>
-        </div>
-      </div>
-    )
-  }
-
-  if (!isConnected) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-        <div role="dialog" aria-modal="true" aria-labelledby="market-modal-title-connect" onClick={(e) => e.stopPropagation()} className="flex w-full max-w-md flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 text-center">
-          <p id="market-modal-title-connect" className="text-sm text-zinc-400">Conectá tu wallet para operar en este mercado.</p>
-          {connectors.map((connector) => (
-            <button
-              key={connector.uid}
-              type="button"
-              onClick={() => connect(connector)}
-              className="rounded-xl bg-zinc-100 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-white"
-            >
-              Conectar con {connector.name === 'Injected' ? 'MetaMask / Rabby' : connector.name}
-            </button>
-          ))}
-          {connectError && (
-            <p role="alert" className="text-xs text-rose-400">
-              {connectError.name === 'ProviderNotFoundError' || connectError.message?.includes('Provider not found')
-                ? 'No se detectó ninguna wallet instalada en tu navegador.'
-                : connectError.message}
-            </p>
-          )}
-          <button type="button" onClick={onClose} className="text-xs text-zinc-500 hover:text-zinc-300">Cerrar</button>
-          <a href="https://ethereum.org/wallets" target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"><ExternalLink size={12} />¿Qué es una wallet?</a>
         </div>
       </div>
     )
@@ -88,25 +60,25 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
     }
 
     try {
-      const isDuplicate = await checkDuplicateMarketBySetId(s.startgg_set_id)
+      const questionId = keccak256(
+        encodeAbiParameters(
+          [{ type: 'uint256' }, { type: 'uint8' }, { type: 'bytes32' }],
+          [BigInt(startggEventId || 0), marketType, keccak256(new TextEncoder().encode(outcomeRef))],
+        ),
+      )
+
+      const isDuplicate = await checkDuplicateMarketByQuestionId(questionId)
       if (isDuplicate) {
         setError('Ya existe un mercado activo para este set.')
         return
       }
-
-      const questionId = keccak256(
-        encodeAbiParameters(
-          [{ type: 'uint256' }, { type: 'uint8' }, { type: 'bytes32' }],
-          [BigInt(startggEventId), marketType, keccak256(new TextEncoder().encode(outcomeRef))],
-        ),
-      )
 
       const totalApproval = CREATION_BOND_USDC + seed
 
       try {
         await createMarket({
           questionId,
-          startggEventId: BigInt(startggEventId),
+          startggEventId: BigInt(startggEventId || 0),
           marketType,
           seedLiquidity: seed,
           eventStartsAt: BigInt(eventStartsAt),
@@ -146,12 +118,12 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
             <label htmlFor="modal-seed-liquidity" className="mb-1 block text-xs font-medium text-zinc-400">
-              Liquidez inicial (USDC, mínimo 10)
+              Liquidez inicial (USDC, mínimo 1)
             </label>
             <input
               id="modal-seed-liquidity"
               type="number"
-              min="10"
+              min="1"
               step="0.01"
               value={seedLiquidity}
               onChange={(e) => {
@@ -163,14 +135,14 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') {
                   const n = Number(seedLiquidity)
-                  if (!isNaN(n) && n <= 10) e.preventDefault()
+                  if (!isNaN(n) && n <= 1) e.preventDefault()
                 }
               }}
               disabled={isPending}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
             />
-            {Number(seedLiquidity) < 10 && seedLiquidity !== "" && (
-              <p className="mt-1 text-xs text-rose-400">Mínimo 10 USDC</p>
+            {Number(seedLiquidity) < 1 && seedLiquidity !== "" && (
+              <p className="mt-1 text-xs text-rose-400">Mínimo 1 USDC</p>
             )}
           </div>
 
@@ -188,13 +160,41 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
 
           {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
 
-          <button
-            type="submit"
-            disabled={isPending || isFormInvalid}
-            className="rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-          >
-            {isPending ? 'Confirmando…' : 'Crear mercado'}
-          </button>
+          <div className="mt-2 flex flex-col gap-3">
+            {!isConnected ? (
+              <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+                <p className="mb-1 text-center text-xs text-zinc-400">Elegí tu wallet para pagar y crear el mercado</p>
+                {connectors.map((connector) => (
+                  <button
+                    key={connector.uid}
+                    type="button"
+                    onClick={() => connect(connector)}
+                    className="rounded-lg bg-zinc-100 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:bg-white"
+                  >
+                    Conectar con {connector.name === 'Injected' ? 'MetaMask / Rabby' : connector.name}
+                  </button>
+                ))}
+                {connectError && (
+                  <p role="alert" className="mt-1 text-center text-[11px] text-rose-400">
+                    {connectError.name === 'ProviderNotFoundError' || connectError.message?.includes('Provider not found')
+                      ? 'No se detectó ninguna wallet instalada en tu navegador.'
+                      : connectError.message}
+                  </p>
+                )}
+                <a href="https://ethereum.org/wallets" target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center justify-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300">
+                  <ExternalLink size={10} /> ¿Qué es una wallet?
+                </a>
+              </div>
+            ) : (
+              <button
+                type="submit"
+                disabled={isPending || isFormInvalid}
+                className="w-full rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:opacity-50"
+              >
+                {isPending ? 'Confirmando en tu wallet…' : 'Pagar y Crear Mercado'}
+              </button>
+            )}
+          </div>
         </form>
       </div>
     </div>

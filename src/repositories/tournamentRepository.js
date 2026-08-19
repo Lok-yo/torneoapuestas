@@ -230,7 +230,7 @@ export async function checkDuplicateMarket(startggEventId) {
   assertConfigured()
   const { count, error } = await supabase
     .from('onchain_markets')
-    .select('id', { count: 'exact', head: true })
+    .select('question_id', { count: 'exact', head: true })
     .eq('startgg_event_id', startggEventId)
     .eq('market_state', 3)
 
@@ -277,7 +277,7 @@ export async function getSetById(startggSetId) {
   const { data, error } = await supabase
     .from('public_tournament_sets_view')
     .select(TOURNAMENT_SET_FIELDS)
-    .eq('startgg_set_id', startggSetId)
+    .eq('question_id', questionId)
     .maybeSingle()
 
   if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
@@ -291,12 +291,12 @@ export async function getSetById(startggSetId) {
  * @param {number} startggSetId
  * @returns {Promise<boolean>} true if a duplicate exists
  */
-export async function checkDuplicateMarketBySetId(startggSetId) {
+export async function checkDuplicateMarketByQuestionId(questionId) {
   assertConfigured()
   const { count, error } = await supabase
     .from('onchain_markets')
-    .select('id', { count: 'exact', head: true })
-    .eq('startgg_set_id', startggSetId)
+    .select('question_id', { count: 'exact', head: true })
+    .eq('question_id', questionId)
     .in('state', ['PENDING', 'CHALLENGED', 'ACTIVE'])
 
   if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })

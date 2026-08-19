@@ -5,22 +5,31 @@
 // onchain-prediction-markets spec "Permissionless Market Creation
 // Eligibility" / "Permissionless Market Creation Guardrail (Creation
 // Bond)".
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { PlusCircle, AlertCircle, ToggleLeft, ToggleRight, AlertTriangle, ExternalLink } from 'lucide-react'
+import { PlusCircle, AlertCircle, AlertTriangle, ExternalLink, Loader2, Trophy, Swords, Users } from 'lucide-react'
 import { keccak256, encodeAbiParameters } from 'viem'
 import { useWalletConnect, useCreateMarket } from '../lib/web3/hooks.js'
 import { parseUsdc, formatUsdc } from '../lib/web3/format.js'
 import { MARKET_FACTORY_ADDRESS } from '../lib/web3/contracts.js'
 import { translateError } from '../lib/web3/translateError.js'
-import { checkDuplicateMarket } from '../repositories/tournamentRepository.js'
+import { checkDuplicateMarket, checkDuplicateMarketBySetId, listTournamentSets } from '../repositories/tournamentRepository.js'
 import TournamentSearchCombobox from '../components/TournamentSearchCombobox.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
-import ManualEventIdInput from '../components/ManualEventIdInput.jsx'
 import MarketPreview from '../components/MarketPreview.jsx'
 
-const CREATION_BOND_USDC = 25n * 1_000_000n
-const MIN_LIQUIDITY_USDC = 10n * 1_000_000n
+const CREATION_BOND_USDC = 1n * 1_000_000n
+const MIN_LIQUIDITY_USDC = 1n * 1_000_000n
+
+const ROUND_LABEL = {
+  1: 'Grand Finals',
+  2: 'Winners Finals',
+  3: 'Losers Finals',
+  4: 'Winners Semis',
+  5: 'Losers Semis',
+  6: 'Round of 8',
+  7: 'Quarterfinals',
+}
 
 export default function CreateMarketPage() {
   const navigate = useNavigate()
@@ -28,55 +37,100 @@ export default function CreateMarketPage() {
   const { createMarket, isPending } = useCreateMarket()
 
   const [selectedTournament, setSelectedTournament] = useState(null)
-  const [manualEventId, setManualEventId] = useState('')
-  const [useManualInput, setUseManualInput] = useState(false)
   const [marketType, setMarketType] = useState(0)
-  const [outcomeRef, setOutcomeRef] = useState('')
-  const [seedLiquidity, setSeedLiquidity] = useState('100')
+  const [seedLiquidity, setSeedLiquidity] = useState('10')
   const [error, setError] = useState(null)
 
-  const resolvedEventId = useManualInput ? manualEventId : selectedTournament?.startgg_event_id
+  // Loaded from the selected tournament
+  const [sets, setSets] = useState([])
+  const [setsLoading, setSetsLoading] = useState(false)
 
-  const refTrimmed = outcomeRef.trim()
-  const perMatchRefInvalid = marketType === 0 && refTrimmed.length > 0 && !/(?:vs|—)/i.test(refTrimmed) && refTrimmed.length <= 8
+  // User selection
+  const [selectedSet, setSelectedSet] = useState(null)
+  const [selectedEntrant, setSelectedEntrant] = useState(null)
+
+  // Load sets when tournament changes
+  useEffect(() => {
+    if (!selectedTournament?.id) {
+      setSets([])
+      setSelectedSet(null)
+      setSelectedEntrant(null)
+      return
+    }
+
+    let cancelled = false
+    setSetsLoading(true)
+    setSets([])
+    setSelectedSet(null)
+    setSelectedEntrant(null)
+    setError(null)
+
+    listTournamentSets(selectedTournament.id)
+      .then((data) => {
+        if (!cancelled) setSets(data)
+      })
+      .catch(() => {
+        if (!cancelled) setSets([])
+      })
+      .finally(() => {
+        if (!cancelled) setSetsLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [selectedTournament?.id])
+
+  // Reset selection when market type changes
+  useEffect(() => {
+    setSelectedSet(null)
+    setSelectedEntrant(null)
+    setError(null)
+  }, [marketType])
+
+  // Extract unique entrant names from the Top 8 sets
+  const entrants = useMemo(() => {
+    const names = new Set()
+    for (const s of sets) {
+      if (s.entrant_a_name) names.add(s.entrant_a_name)
+      if (s.entrant_b_name) names.add(s.entrant_b_name)
+    }
+    return [...names].sort()
+  }, [sets])
+
+  // Bettable sets (pending, both entrants known, no existing market)
+  const availableSets = useMemo(
+    () =>
+      sets.filter(
+        (s) =>
+          s.entrant_a_name &&
+          s.entrant_b_name &&
+          (s.state === 'PENDING' || s.state === 'IN_PROGRESS') &&
+          !s.has_market,
+      ),
+    [sets],
+  )
+
+  // Derive outcomeRef from selection
+  const outcomeRef =
+    marketType === 0 && selectedSet
+      ? `set:${selectedSet.startgg_set_id}`
+      : marketType === 1 && selectedEntrant
+        ? selectedEntrant
+        : ''
+
+  const resolvedEventId = selectedTournament?.startgg_event_id
+
   const isFormInvalid =
     !resolvedEventId ||
-    !refTrimmed ||
-    refTrimmed.length < 3 ||
-    perMatchRefInvalid ||
-    Number(seedLiquidity) < 10
-
-  function toggleManualInput() {
-    setUseManualInput((prev) => !prev)
-    setSelectedTournament(null)
-    setManualEventId('')
-    setError(null)
-  }
+    !outcomeRef ||
+    Number(seedLiquidity) < 1 ||
+    (marketType === 0 && !selectedSet) ||
+    (marketType === 1 && !selectedEntrant)
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError(null)
 
-    if (!resolvedEventId) {
-      setError('Seleccioná un torneo o ingresá un ID de evento manualmente.')
-      return
-    }
-
-    const ref = outcomeRef.trim()
-    if (!ref) {
-      setError('Completá la referencia del resultado.')
-      return
-    }
-
-    if (ref.length < 3) {
-      setError('La referencia debe tener al menos 3 caracteres.')
-      return
-    }
-
-    if (marketType === 0 && !/(?:vs|—)/i.test(ref) && ref.length <= 8) {
-      setError('Incluí los dos jugadores (Ej: Mango vs Zain).')
-      return
-    }
+    if (isFormInvalid) return
 
     const seed = parseUsdc(seedLiquidity)
     if (seed < MIN_LIQUIDITY_USDC) {
@@ -85,20 +139,33 @@ export default function CreateMarketPage() {
     }
 
     try {
-      const isDuplicate = await checkDuplicateMarket(BigInt(resolvedEventId))
-      if (isDuplicate) {
-        setError('Ya existe un mercado activo para este evento. Intentá con otro.')
-        return
+      // Duplicate check
+      if (marketType === 0 && selectedSet) {
+        const isDup = await checkDuplicateMarketBySetId(selectedSet.startgg_set_id)
+        if (isDup) {
+          setError('Ya existe un mercado activo para este set.')
+          return
+        }
+      } else {
+        const isDup = await checkDuplicateMarket(BigInt(resolvedEventId))
+        if (isDup) {
+          setError('Ya existe un mercado activo para este evento.')
+          return
+        }
       }
 
       const questionId = keccak256(
         encodeAbiParameters(
           [{ type: 'uint256' }, { type: 'uint8' }, { type: 'bytes32' }],
-          [BigInt(resolvedEventId), marketType, keccak256(new TextEncoder().encode(outcomeRef.trim()))],
+          [BigInt(resolvedEventId), marketType, keccak256(new TextEncoder().encode(outcomeRef))],
         ),
       )
 
-      const eventStartsAt = BigInt(Math.floor(Date.now() / 1000) + 3600)
+      const eventStartsAt =
+        marketType === 0 && selectedSet?.event_starts_at
+          ? BigInt(Math.floor(new Date(selectedSet.event_starts_at).getTime() / 1000))
+          : BigInt(Math.floor(Date.now() / 1000) + 3600)
+
       const totalApproval = CREATION_BOND_USDC + seed
 
       await createMarket({
@@ -116,41 +183,6 @@ export default function CreateMarketPage() {
     }
   }
 
-  if (!MARKET_FACTORY_ADDRESS) {
-    return (
-      <div className="mx-auto max-w-md rounded-2xl border border-amber-800/50 bg-amber-950/20 p-6 text-center">
-        <AlertCircle size={32} className="mx-auto mb-2 text-amber-400" />
-        <p className="text-sm text-amber-300">El contrato de mercados no está configurado en este entorno.</p>
-      </div>
-    )
-  }
-
-  if (!isConnected) {
-    return (
-      <div className="mx-auto flex max-w-md flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 text-center">
-        <p className="text-sm text-zinc-400">Conectá una wallet para crear un mercado.</p>
-        {connectors.map((connector) => (
-          <button
-            key={connector.uid}
-            type="button"
-            onClick={() => connect(connector)}
-            className="rounded-xl bg-zinc-100 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-white"
-          >
-            Conectar con {connector.name === 'Injected' ? 'MetaMask / Rabby' : connector.name}
-          </button>
-        ))}
-        {connectError && (
-          <p role="alert" className="text-xs text-rose-400">
-            {connectError.name === 'ProviderNotFoundError' || connectError.message?.includes('Provider not found')
-              ? 'No se detectó ninguna wallet instalada en tu navegador. Por favor instalá una extensión como MetaMask o Rabby.'
-              : connectError.message}
-          </p>
-        )}
-        <a href="https://ethereum.org/wallets" target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"><ExternalLink size={12} />¿Qué es una wallet?</a>
-      </div>
-    )
-  }
-
   return (
     <div className="mx-auto max-w-lg">
       <div className="mb-6 flex items-center gap-2">
@@ -163,138 +195,241 @@ export default function CreateMarketPage() {
         liquidez inicial.
       </p>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
+      {!MARKET_FACTORY_ADDRESS && (
+        <div className="mb-6 rounded-2xl border border-amber-800/50 bg-amber-950/20 p-4 text-center">
+          <AlertCircle size={24} className="mx-auto mb-1 text-amber-400" />
+          <p className="text-sm text-amber-300">El contrato de mercados no está configurado. Las transacciones fallarán.</p>
+        </div>
+      )}
 
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
         {/* Tournament selector */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-medium text-zinc-400">Evento de start.gg</label>
-
-          {!useManualInput ? (
-            <ErrorBoundary>
-              <TournamentSearchCombobox
-                onSelect={(t) => {
-                  setSelectedTournament(t)
-                  setError(null)
-                }}
-                disabled={isPending}
-              />
-            </ErrorBoundary>
-          ) : (
-            <ManualEventIdInput
-              value={manualEventId}
-              onChange={(v) => { setManualEventId(v); setError(null) }}
-              onClear={() => { setManualEventId(''); setError(null) }}
+          <ErrorBoundary>
+            <TournamentSearchCombobox
+              onSelect={(t) => {
+                setSelectedTournament(t)
+                setError(null)
+              }}
               disabled={isPending}
             />
-          )}
-
-          <button
-            type="button"
-            onClick={toggleManualInput}
-            className="flex w-fit items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300"
-          >
-            {useManualInput ? (
-              <ToggleRight size={16} className="text-violet-400" />
-            ) : (
-              <ToggleLeft size={16} />
-            )}
-            {useManualInput ? 'Buscar torneo en la DB' : '¿No lo encontrás? Ingresá el ID manualmente'}
-          </button>
+          </ErrorBoundary>
         </div>
 
         {/* Market type */}
-        <div>
-          <label htmlFor="market-type" className="mb-1 block text-xs font-medium text-zinc-400">
-            Tipo de mercado
-          </label>
-          <select
-            id="market-type"
-            value={marketType}
-            onChange={(e) => {
-              const val = Number(e.target.value)
-              setMarketType(val)
-              if (val === 1) setOutcomeRef('tournament-winner')
-              else if (outcomeRef === 'tournament-winner') setOutcomeRef('')
-              setError(null)
-            }}
-            disabled={isPending}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
-          >
-            <option value={0}>Por partido (per-match)</option>
-            <option value={1}>Ganador del torneo (per-tournament-winner)</option>
-          </select>
-        </div>
-
-        {/* Outcome ref */}
-        <div>
-          <label htmlFor="outcome-ref" className="mb-1 block text-xs font-medium text-zinc-400">
-            {marketType === 0 ? '¿Qué partido se resuelve?' : 'Referencia del ganador'}
-          </label>
-          <input
-            id="outcome-ref"
-            type="text"
-            value={outcomeRef}
-            onChange={(e) => setOutcomeRef(e.target.value)}
-            placeholder={marketType === 0 ? 'Ej: Mango vs Zain — Winners Semis' : 'Ej: Campeón del torneo'}
-            disabled={isPending || marketType === 1}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
-          />
-          <div className="mt-1 flex gap-2 rounded-lg border border-amber-500/20 bg-amber-950/20 p-3">
-            <AlertTriangle size={14} className="shrink-0 text-amber-400" />
-            <p className="text-[11px] text-amber-200/80">Este mercado queda grabado on-chain de forma inmutable. Si los datos son incorrectos, cualquier wallet puede desafiar el mercado y perderás el bono de creación.</p>
+        {selectedTournament && (
+          <div>
+            <label htmlFor="market-type" className="mb-1 block text-xs font-medium text-zinc-400">
+              Tipo de mercado
+            </label>
+            <select
+              id="market-type"
+              value={marketType}
+              onChange={(e) => setMarketType(Number(e.target.value))}
+              disabled={isPending}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
+            >
+              <option value={0}>Por partido (per-match)</option>
+              <option value={1}>Ganador del torneo (per-tournament-winner)</option>
+            </select>
           </div>
-        </div>
+        )}
+
+        {/* Loading sets */}
+        {selectedTournament && setsLoading && (
+          <div className="flex items-center justify-center gap-2 py-6 text-zinc-500">
+            <Loader2 size={16} className="animate-spin" />
+            <span className="text-sm">Cargando Top 8…</span>
+          </div>
+        )}
+
+        {/* No sets available */}
+        {selectedTournament && !setsLoading && sets.length === 0 && (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 py-6 text-center">
+            <Users size={20} className="mx-auto mb-2 text-zinc-500" />
+            <p className="text-sm text-zinc-400">Este torneo todavía no tiene sets del Top 8.</p>
+            <p className="mt-1 text-xs text-zinc-600">El poller trae datos cada 60 segundos.</p>
+          </div>
+        )}
+
+        {/* Per-match: set selector */}
+        {selectedTournament && !setsLoading && sets.length > 0 && marketType === 0 && (
+          <div>
+            <label className="mb-2 block text-xs font-medium text-zinc-400">
+              <Swords size={12} className="mr-1 inline" />
+              Seleccioná el partido
+            </label>
+            {availableSets.length === 0 ? (
+              <p className="py-4 text-center text-sm text-zinc-500">
+                No hay partidos disponibles para apostar (ya finalizaron o ya tienen mercado).
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {availableSets.map((s) => {
+                  const isSelected = selectedSet?.startgg_set_id === s.startgg_set_id
+                  return (
+                    <button
+                      key={s.startgg_set_id}
+                      type="button"
+                      onClick={() => { setSelectedSet(s); setError(null) }}
+                      disabled={isPending}
+                      className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ${
+                        isSelected
+                          ? 'border-violet-500 bg-violet-500/10 text-zinc-100'
+                          : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">
+                          {s.entrant_a_name} vs {s.entrant_b_name}
+                        </span>
+                        <span className="text-xs text-zinc-500">
+                          {ROUND_LABEL[s.round] ?? `Ronda ${s.round}`} · Slot {s.slot + 1}
+                        </span>
+                      </div>
+                      {isSelected && (
+                        <span className="rounded-full bg-violet-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                          Seleccionado
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Per-tournament-winner: entrant selector */}
+        {selectedTournament && !setsLoading && sets.length > 0 && marketType === 1 && (
+          <div>
+            <label className="mb-2 block text-xs font-medium text-zinc-400">
+              <Trophy size={12} className="mr-1 inline" />
+              ¿Quién creés que gana? Seleccioná un jugador
+            </label>
+            <p className="mb-3 text-[11px] text-zinc-500">
+              Se creará un mercado "¿Ganará [Jugador] el torneo?" con apuestas Sí/No.
+            </p>
+            {entrants.length === 0 ? (
+              <p className="py-4 text-center text-sm text-zinc-500">
+                No hay jugadores conocidos todavía.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {entrants.map((name) => {
+                  const isSelected = selectedEntrant === name
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => { setSelectedEntrant(name); setError(null) }}
+                      disabled={isPending}
+                      className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
+                        isSelected
+                          ? 'border-violet-500 bg-violet-500/10 text-violet-300'
+                          : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700 hover:text-zinc-100'
+                      }`}
+                    >
+                      {name}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Liquidity */}
-        <div>
-          <label htmlFor="seed-liquidity" className="mb-1 block text-xs font-medium text-zinc-400">
-            Liquidez inicial (USDC, mínimo 10)
-          </label>
-          <input
-            id="seed-liquidity"
-            type="number"
-            min="10"
-            step="0.01"
-            value={seedLiquidity}
-            onChange={(e) => {
-              const v = e.target.value
-              if (v === '') { setSeedLiquidity(''); return }
-              const n = Number(v)
-              if (!isNaN(n)) setSeedLiquidity(v)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowDown') {
-                const n = Number(seedLiquidity)
-                if (!isNaN(n) && n <= 10) e.preventDefault()
-              }
-            }}
-            disabled={isPending}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
-          />
-          {Number(seedLiquidity) < 10 && seedLiquidity !== "" && (
-            <p className="mt-1 text-xs text-rose-400">Mínimo 10 USDC</p>
-          )}
-        </div>
+        {(selectedSet || selectedEntrant) && (
+          <div>
+            <label htmlFor="seed-liquidity" className="mb-1 block text-xs font-medium text-zinc-400">
+              Liquidez inicial (USDC, mínimo 1)
+            </label>
+            <input
+              id="seed-liquidity"
+              type="number"
+              min="1"
+              step="0.01"
+              value={seedLiquidity}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === '') { setSeedLiquidity(''); return }
+                const n = Number(v)
+                if (!isNaN(n)) setSeedLiquidity(v)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') {
+                  const n = Number(seedLiquidity)
+                  if (!isNaN(n) && n <= 1) e.preventDefault()
+                }
+              }}
+              disabled={isPending}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
+            />
+            {Number(seedLiquidity) < 1 && seedLiquidity !== "" && (
+              <p className="mt-1 text-xs text-rose-400">Mínimo 1 USDC</p>
+            )}
+          </div>
+        )}
 
         {/* Preview */}
-        {(selectedTournament || (useManualInput && manualEventId)) && (
+        {selectedTournament && (selectedSet || selectedEntrant) && (
           <MarketPreview
-            tournament={selectedTournament ?? { name: `Evento #${manualEventId}`, game_id: '—', created_at: null }}
+            tournament={selectedTournament}
             marketType={marketType}
             outcomeRef={outcomeRef}
             liquidity={Number(seedLiquidity || 0)}
           />
         )}
 
+        {/* Warning */}
+        {(selectedSet || selectedEntrant) && (
+          <div className="flex gap-2 rounded-lg border border-amber-500/20 bg-amber-950/20 p-3">
+            <AlertTriangle size={14} className="shrink-0 text-amber-400" />
+            <p className="text-[11px] text-amber-200/80">Este mercado queda grabado on-chain de forma inmutable. Si los datos son incorrectos, cualquier wallet puede desafiar el mercado y perderás el bono de creación.</p>
+          </div>
+        )}
+
         {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={isPending || isFormInvalid}
-          className="rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-        >
-          {isPending ? 'Confirmando…' : 'Crear mercado'}
-        </button>
+        {(selectedSet || selectedEntrant) && (
+          <div className="mt-2 flex flex-col gap-3">
+            {!isConnected ? (
+              <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+                <p className="mb-1 text-center text-xs text-zinc-400">Elegí tu wallet para pagar y crear el mercado</p>
+                {connectors.map((connector) => (
+                  <button
+                    key={connector.uid}
+                    type="button"
+                    onClick={() => connect(connector)}
+                    className="rounded-lg bg-zinc-100 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:bg-white"
+                  >
+                    Conectar con {connector.name === 'Injected' ? 'MetaMask / Rabby' : connector.name}
+                  </button>
+                ))}
+                {connectError && (
+                  <p role="alert" className="mt-1 text-center text-[11px] text-rose-400">
+                    {connectError.name === 'ProviderNotFoundError' || connectError.message?.includes('Provider not found')
+                      ? 'No se detectó ninguna wallet instalada en tu navegador.'
+                      : connectError.message}
+                  </p>
+                )}
+                <a href="https://ethereum.org/wallets" target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center justify-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300">
+                  <ExternalLink size={10} /> ¿Qué es una wallet?
+                </a>
+              </div>
+            ) : (
+              <button
+                type="submit"
+                disabled={isPending || isFormInvalid}
+                className="w-full rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:opacity-50"
+              >
+                {isPending ? 'Confirmando en tu wallet…' : 'Pagar y Crear Mercado'}
+              </button>
+            )}
+          </div>
+        )}
       </form>
     </div>
   )
