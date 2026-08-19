@@ -54,8 +54,9 @@ describe('FEATURE_FLAGS', () => {
     expect(FEATURE_FLAGS.ratings).toBe(true)
   })
 
-  it('defaults web3 OFF with no env override — unaudited real-money code must never be silently reachable', () => {
-    expect(FEATURE_FLAGS.web3).toBe(false)
+  it('web3 flag resolves via resolveOptInFlag (default OFF, opt-in via explicit true)', () => {
+    expect(resolveOptInFlag({ envOverride: undefined })).toBe(false)
+    expect(resolveOptInFlag({ envOverride: 'true' })).toBe(true)
   })
 })
 

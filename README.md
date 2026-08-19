@@ -8,6 +8,21 @@ A production-ready esports tournament and prediction-market platform. Built with
 
 ---
 
+## 🔐 Security & Accounting Fixes (Migration 0022)
+
+Applied security hardening based on PDF audit findings:
+
+1. **Market Resolution Ownership Validation**: `resolve_market()` now validates that the caller is either an admin, the market creator, OR the tournament organizer. Prevents unauthorized market resolution by other organizers.
+
+2. **Weighted Average Price Calculation**: `buy_market_shares()` now correctly recalculates the weighted average price when a user purchases additional shares of an existing position:
+   ```
+   new_avg_price = ((old_shares * old_avg_price) + (new_shares * buy_price)) / total_shares
+   ```
+
+3. **Test Coverage**: Added `audit_fixes.sql` pgTAP suite with 4 assertions validating ownership enforcement and price calculation.
+
+---
+
 ## 🛠️ Environment and Setup Contract
 
 Copy `.env.example` to `.env.local` (git-ignored) and fill in your Supabase & Web3 variables. **Never commit a real `.env` or service-role key.**

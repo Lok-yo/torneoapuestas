@@ -69,6 +69,7 @@ export default function Navbar({ onToggleNav }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar evento, juego, jugador…"
+            aria-label="Buscar evento, juego, jugador"
             className="h-8 w-full bg-transparent text-[13px] text-[#efece6] outline-none placeholder:text-[#5a5650]"
           />
         </label>
@@ -101,13 +102,15 @@ export default function Navbar({ onToggleNav }) {
 
         {isAuthenticated ? (
           <>
-            <Link
-              to="/wallet"
-              className="inline-flex items-center gap-1.5 border border-[#2a3140] px-3 py-1.5 text-[12px] font-semibold text-[#eef1f4] hover:border-[#b6ff3a]"
-            >
-              <Wallet size={13} />
-              <span>Billetera</span>
-            </Link>
+            {FEATURE_FLAGS.web3 && (
+              <Link
+                to="/wallet"
+                className="inline-flex items-center gap-1.5 border border-[#2a3140] px-3 py-1.5 text-[12px] font-semibold text-[#eef1f4] hover:border-[#b6ff3a]"
+              >
+                <Wallet size={13} />
+                <span>Billetera</span>
+              </Link>
+            )}
             <Link to={`/jugadores/${profile.username}`} className="flex items-center gap-1.5 px-1">
               <Avatar username={profile.username} size={24} />
               <span className="hidden text-[12px] font-medium text-[#efece6] sm:inline">@{profile.username}</span>

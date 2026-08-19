@@ -25,26 +25,6 @@ export async function getWallet() {
 }
 
 /**
- * Deposit funds into user's wallet.
- * @param {number} amount
- * @param {string} paymentRef
- */
-export async function depositFunds(amount, paymentRef = 'manual_deposit') {
-  assertConfigured()
-  const { data, error } = await supabase.rpc('deposit_funds', {
-    p_amount: amount,
-    p_payment_ref: paymentRef,
-  })
-  if (error) throw toAppError(error)
-  const wallet = data?.[0]
-  return {
-    balance: Number(wallet.balance),
-    locked_balance: Number(wallet.locked_balance),
-    available_balance: Number(wallet.available_balance),
-  }
-}
-
-/**
  * Withdraw funds from user's wallet.
  * @param {number} amount
  * @param {string} payoutDetails

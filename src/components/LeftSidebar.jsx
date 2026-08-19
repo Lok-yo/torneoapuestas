@@ -6,10 +6,10 @@ import { useSession } from '../auth/SessionProvider.jsx'
 import GameCover from './GameCover.jsx'
 
 const item = ({ isActive }) =>
-  `flex items-center gap-2.5 px-4 py-2.5 text-[13px] ${
+  `flex items-center gap-2.5 px-4 py-2.5 text-[13px] transition-colors duration-150 ${
     isActive
-      ? 'bg-[#12161c] text-white shadow-[inset_2px_0_0_#b6ff3a]'
-      : 'text-[#9aa3b2] hover:bg-[#10131a] hover:text-white'
+      ? 'bg-zinc-800/50 text-white shadow-[inset_2px_0_0_#b6ff3a]'
+      : 'text-zinc-400 hover:bg-zinc-800/30 hover:text-white'
   }`
 
 export default function LeftSidebar({ onNavigate }) {
@@ -46,7 +46,7 @@ export default function LeftSidebar({ onNavigate }) {
         )}
       </nav>
 
-      <div className="mt-1 border-t border-[#3a1218] px-4 py-4">
+      <div className="mt-1 border-t border-zinc-700/50 px-4 py-4">
         <p className="rail-label kicker mb-3">Juegos</p>
         <div className="flex flex-col gap-1">
           {GAMES.map((game) => (
@@ -54,7 +54,7 @@ export default function LeftSidebar({ onNavigate }) {
               key={game.id}
               to={`/torneos?juego=${game.id}`}
               onClick={onNavigate}
-              className="flex items-center gap-2.5 py-1.5 text-[13px] font-semibold text-[#9a9090] hover:text-white"
+              className="flex items-center gap-2.5 py-1.5 text-[13px] font-semibold text-zinc-400 transition-colors duration-150 hover:text-white"
             >
               <GameCover game={game} className="h-10 w-7 shrink-0" />
               <span className="rail-label truncate">{game.shortName}</span>
@@ -64,7 +64,7 @@ export default function LeftSidebar({ onNavigate }) {
       </div>
 
       {FEATURE_FLAGS.web3 && (
-        <div className="mt-auto border-t border-[#242424] p-4 text-[10px] uppercase tracking-[0.18em] text-[#5a5650]">
+        <div className="mt-auto border-t border-zinc-700/50 p-4 text-[10px] uppercase tracking-[0.18em] text-zinc-500">
           Polygon Amoy
         </div>
       )}

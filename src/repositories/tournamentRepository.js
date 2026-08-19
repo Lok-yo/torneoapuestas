@@ -8,6 +8,13 @@
 // separate view is needed here — unlike bracket/match/result reads, which
 // go through public_brackets_view specifically to keep private membership
 // identities out of an unauthenticated response (see bracketRepository.js).
+//
+// TOP-8 bracket reads (listTournamentSets, getSetById) query the
+// public_tournament_sets_view defined in 0025_tournament_sets_and_market_set_key.sql.
+// The base table tournament_sets is service-role-only (RLS on, no client
+// grants), so all client reads go through the allowlisted view that hides
+// phase_id, raw entrant/winner IDs, and cache internals.
+//
 // See tournament-operations spec "Validated tournament lifecycle" /
 // "Registration and roster freeze".
 import { supabase } from '../lib/supabase.js'
@@ -19,7 +26,18 @@ function assertConfigured() {
 }
 
 const TOURNAMENT_FIELDS =
+  'id, organizer_id, game_id, format_id, name, status, version, roster_frozen_at, startgg_event_id, created_at, updated_at'
+const TOURNAMENT_FIELDS_FALLBACK =
   'id, organizer_id, game_id, format_id, name, status, version, roster_frozen_at, created_at, updated_at'
+
+function isMissingColumnError(error, column) {
+  const msg = String(error?.message ?? '')
+  return msg.includes(column) && msg.includes('does not exist')
+}
+
+/** Column allowlist for the public tournament_sets view (0025). */
+const TOURNAMENT_SET_FIELDS =
+  'startgg_set_id, tournament_id, startgg_event_id, phase_name, round, slot, state, entrant_a_name, entrant_b_name, event_starts_at, started_at, completed_at, updated_at, winner_name, has_market, market_question_id'
 
 /** Lists tournaments visible to the current caller (published, plus the organizer's own drafts). */
 export async function listTournaments() {
@@ -29,7 +47,14 @@ export async function listTournaments() {
     .select(TOURNAMENT_FIELDS)
     .order('created_at', { ascending: false })
 
-  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  if (error) {
+    if (isMissingColumnError(error, 'startgg_event_id')) {
+      const retry = await supabase.from('tournaments').select(TOURNAMENT_FIELDS_FALLBACK).order('created_at', { ascending: false })
+      if (retry.error) throw toAppError({ error: { code: 'UNAVAILABLE', message: retry.error.message } })
+      return retry.data ?? []
+    }
+    throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  }
   return data ?? []
 }
 
@@ -38,7 +63,14 @@ export async function getTournament(id) {
   assertConfigured()
   const { data, error } = await supabase.from('tournaments').select(TOURNAMENT_FIELDS).eq('id', id).maybeSingle()
 
-  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  if (error) {
+    if (isMissingColumnError(error, 'startgg_event_id')) {
+      const retry = await supabase.from('tournaments').select(TOURNAMENT_FIELDS_FALLBACK).eq('id', id).maybeSingle()
+      if (retry.error) throw toAppError({ error: { code: 'UNAVAILABLE', message: retry.error.message } })
+      return retry.data ?? null
+    }
+    throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  }
   return data ?? null
 }
 
@@ -142,5 +174,132 @@ export async function claimOrganizerRole() {
   const { data, error } = await supabase.rpc('claim_organizer_role')
   if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
   return data
+}
+
+/**
+ * Searches tournaments by name or game_id, returning only those linked
+ * to a start.gg event. Used by the Create-Market combobox.
+ *
+ * SECURITY: We escape `, %, ., (, ), _, \` before interpolation into a
+ * PostgREST `ilike` filter so user input cannot inject PostgREST filter
+ * operators or wildcards.
+ * @param {string} query – free-text search term
+ * @returns {Promise<Array<object>>} up to 10 results
+ */
+export async function searchTournaments(query) {
+  assertConfigured()
+  const raw = String(query ?? '').trim().slice(0, 100)
+  if (raw.length < 2) return []
+
+  const escaped = raw.replace(/[,%.()_\\]/g, (c) => `\\${c}`)
+  const { data, error } = await supabase
+    .from('tournaments')
+    .select(TOURNAMENT_FIELDS)
+    .not('startgg_event_id', 'is', null)
+    .or(`name.ilike.%${escaped}%,game_id.ilike.%${escaped}%`)
+    .order('name')
+    .limit(10)
+
+  if (error) {
+    if (isMissingColumnError(error, 'startgg_event_id')) {
+      console.warn('[tournamentRepository] searchTournaments: column missing, retrying without startgg_event_id', { query, error: error.message })
+      const retry = await supabase
+        .from('tournaments')
+        .select(TOURNAMENT_FIELDS_FALLBACK)
+        .or(`name.ilike.%${escaped}%,game_id.ilike.%${escaped}%`)
+        .order('name')
+        .limit(10)
+      if (retry.error) throw toAppError({ error: { code: 'UNAVAILABLE', message: retry.error.message } })
+      return retry.data ?? []
+    }
+    throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  }
+  return data ?? []
+}
+
+/**
+ * Checks whether an active market already exists for a given start.gg
+ * event ID, to prevent duplicates at creation time.
+ * @deprecated Use checkDuplicateMarketBySetId for TOP-8 set markets.
+ *   This function checks by event ID and uses the legacy market_state
+ *   column (integer enum); new code should scope dedup by set.
+ * @param {number} startggEventId
+ * @returns {Promise<boolean>} true if a duplicate exists
+ */
+export async function checkDuplicateMarket(startggEventId) {
+  assertConfigured()
+  const { count, error } = await supabase
+    .from('onchain_markets')
+    .select('question_id', { count: 'exact', head: true })
+    .eq('startgg_event_id', startggEventId)
+    .eq('market_state', 3)
+
+  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  return (count ?? 0) > 0
+}
+
+// -----------------------------------------------------------------
+// TOP-8 set reads (0025_tournament_sets_and_market_set_key.sql)
+// -----------------------------------------------------------------
+
+/**
+ * Lists all TOP-8 bracket sets for a tournament, ordered by round then slot.
+ * Reads from the public view (no sensitive internals exposed).
+ * @param {string} tournamentId
+ * @returns {Promise<Array<object>>}
+ */
+export async function listTournamentSets(tournamentId) {
+  assertConfigured()
+  const { data, error } = await supabase
+    .from('public_tournament_sets_view')
+    .select(TOURNAMENT_SET_FIELDS)
+    .eq('tournament_id', tournamentId)
+    .order('round')
+    .order('slot')
+
+  if (error) {
+    if (String(error.message ?? '').includes('does not exist')) {
+      console.warn('[tournamentRepository] listTournamentSets: view/column missing, returning []', { tournamentId, error: error.message })
+      return []
+    }
+    throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  }
+  return data ?? []
+}
+
+/**
+ * Reads a single TOP-8 set by its start.gg set ID.
+ * @param {number} startggSetId
+ * @returns {Promise<object|null>}
+ */
+export async function getSetById(startggSetId) {
+  assertConfigured()
+  const { data, error } = await supabase
+    .from('public_tournament_sets_view')
+    .select(TOURNAMENT_SET_FIELDS)
+    .eq('question_id', questionId)
+    .maybeSingle()
+
+  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  return data ?? null
+}
+
+/**
+ * Checks whether a live market (PENDING/CHALLENGED/ACTIVE) already exists
+ * for a given start.gg set ID. This replaces the legacy checkDuplicateMarket
+ * for TOP-8 markets by scoping dedup to the set instead of the event.
+ * @param {number} startggSetId
+ * @returns {Promise<boolean>} true if a duplicate exists
+ */
+export async function checkDuplicateMarketByQuestionId(questionId) {
+  assertConfigured()
+  const { count, error } = await supabase
+    .from('onchain_markets')
+    .select('question_id', { count: 'exact', head: true })
+    .eq('question_id', questionId)
+    .in('state', ['PENDING', 'CHALLENGED', 'ACTIVE'])
+
+  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  return (count ?? 0) > 0
 }
 

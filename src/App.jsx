@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import MainLayout from './layouts/MainLayout.jsx'
 import RequireAuth from './components/RequireAuth.jsx'
 import HomePage from './pages/HomePage.jsx'
@@ -9,14 +9,15 @@ import TournamentsPage from './pages/TournamentsPage.jsx'
 import TournamentDetailPage from './pages/TournamentDetailPage.jsx'
 import OrganizerPanelPage from './pages/OrganizerPanelPage.jsx'
 import AdminPanelPage from './pages/AdminPanelPage.jsx'
-import MarketDetailPage from './pages/MarketDetailPage.jsx'
 import LeaderboardPage from './pages/LeaderboardPage.jsx'
 import PlayerProfilePage from './pages/PlayerProfilePage.jsx'
 import WalletPage from './pages/WalletPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
-import CreateMarketPage from './pages/CreateMarketPage.jsx'
 import { useSession } from './auth/SessionProvider.jsx'
 import { FEATURE_FLAGS } from './config/featureFlags.js'
+
+const MarketDetailPage = lazy(() => import('./pages/MarketDetailPage.jsx'))
+const CreateMarketPage = lazy(() => import('./pages/CreateMarketPage.jsx'))
 
 // A real Google OAuth sign-in returns the browser to "/", not wherever the
 // user clicked "sign in" from (unlike the old mock flow's inline
@@ -42,7 +43,8 @@ export default function App() {
   return (
     <>
       <OnboardingRedirect />
-      <Routes>
+      <Suspense fallback={<div className="py-12 text-center text-zinc-500">Cargando…</div>}>
+        <Routes>
         <Route element={<MainLayout />}>
           <Route index element={<HomePage />} />
           <Route path="login" element={<LoginPage />} />
@@ -51,26 +53,20 @@ export default function App() {
           <Route path="torneos/:id" element={<TournamentDetailPage />} />
           <Route path="ranking" element={<LeaderboardPage />} />
           <Route path="jugadores/:username" element={<PlayerProfilePage />} />
-          {/* Legacy demo-only prediction-market/wallet UI (simulated TCRED
-              credits, never real financial state — proposal.md "Out of
-              Scope"). The route element resolves to NotFoundPage outside
-              FEATURE_FLAGS.demoFinancialUI, which is hard-forced off in
-              every production build — the routes stay registered so
-              RequireAuth's own auth-guard behavior on /wallet (unrelated
-              to this flag) is unchanged. See tasks.md 5.6/5.7 and
-              legacy-migration-controls spec "Legacy identity and
-              financial isolation". */}
-          <Route path="mercados/:id" element={<MarketDetailPage />} />
+          {/* Prediction-market detail route — gated behind FEATURE_FLAGS.web3.
+              When off (default), resolves to NotFoundPage mirroring the
+              /mercados/nuevo gate pattern. The route element internally
+              delegates to OnchainMarketDetailView when web3 is on. See
+              design.md Decision 7 and tasks.md 11.5. */}
+          <Route path="mercados/:id" element={FEATURE_FLAGS.web3 ? <MarketDetailPage /> : <NotFoundPage />} />
           {/* Permissionless on-chain market creation (proposal.md "market
-              creation: permissionless") — a genuinely NEW route, unlike
-              /mercados/:id and /wallet above which are repointed in place.
-              Registered but resolves to NotFoundPage while
-              FEATURE_FLAGS.web3 is off (default), mirroring the existing
-              demoFinancialUI gate pattern. See design.md Decision 7 and
-              tasks.md 11.5. */}
+              creation: permissionless") — gated behind FEATURE_FLAGS.web3.
+              Registered but resolves to NotFoundPage while off (default). */}
           <Route path="mercados/nuevo" element={FEATURE_FLAGS.web3 ? <CreateMarketPage /> : <NotFoundPage />} />
+          {/* Wallet route — gated behind FEATURE_FLAGS.web3.
+              When off, resolves to NotFoundPage (no legacy TCRED UI). */}
           <Route element={<RequireAuth />}>
-            <Route path="wallet" element={<WalletPage />} />
+            <Route path="wallet" element={FEATURE_FLAGS.web3 ? <WalletPage /> : <NotFoundPage />} />
           </Route>
           {/* First real production usage of RequireAuth's role prop (built
               in Phase 2, unused by any route until now) — see tasks.md
@@ -94,9 +90,12 @@ export default function App() {
           <Route element={<RequireAuth role="admin" />}>
             <Route path="admin" element={<AdminPanelPage />} />
           </Route>
+          <Route path="/billetera" element={<Navigate to="/wallet" replace />} />
+          <Route path="/crear-mercado" element={<Navigate to="/mercados/nuevo" replace />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
-      </Routes>
+        </Routes>
+      </Suspense>
     </>
   )
 }

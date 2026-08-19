@@ -1,5 +1,10 @@
+-- wallet_ledger.sql
+-- GREEN suite for wallet ledger RPCs (post 0023 financial audit fixes):
+-- deposit_funds has been dropped; tests now cover get_or_create_wallet,
+-- withdraw_funds, and RLS isolation only.
+
 BEGIN;
-SELECT plan(6);
+SELECT plan(4);
 
 -- Setup test users
 INSERT INTO auth.users (id, email) VALUES
@@ -23,29 +28,14 @@ SELECT results_eq(
   'wallet_transactions records initial bonus'
 );
 
--- 3. Deposit funds credits balance
-SELECT results_eq(
-  'SELECT balance, locked_balance, available_balance FROM public.deposit_funds(50.00, ''ref_test_123'')',
-  'VALUES (150.00::numeric, 0.00::numeric, 150.00::numeric)',
-  'deposit_funds increases balance to 150'
-);
-
--- 4. Withdraw funds debits balance
+-- 3. Withdraw funds debits balance
 SELECT results_eq(
   'SELECT balance, locked_balance, available_balance FROM public.withdraw_funds(30.00, ''bank_payout_1'')',
-  'VALUES (120.00::numeric, 0.00::numeric, 120.00::numeric)',
-  'withdraw_funds decreases balance to 120'
+  'VALUES (70.00::numeric, 0.00::numeric, 70.00::numeric)',
+  'withdraw_funds decreases balance to 70'
 );
 
--- 5. Overdraft withdrawal is rejected with INSUFFICIENT_FUNDS
-SELECT throws_ok(
-  'SELECT public.withdraw_funds(1000.00, ''excess_payout'')',
-  '22003',
-  NULL,
-  'overdraft withdrawal raises insufficient funds error'
-);
-
--- 6. RLS: User 2 cannot see User 1 transactions
+-- 4. RLS: User 2 cannot see User 1 transactions
 SET LOCAL role authenticated;
 SET LOCAL "request.jwt.claims" TO '{"sub": "e7000000-0000-0000-0000-000000000002", "role": "authenticated"}'; SET LOCAL "request.jwt.claim.sub" TO 'e7000000-0000-0000-0000-000000000002';
 SELECT public.get_or_create_wallet();

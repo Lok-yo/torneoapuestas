@@ -11,6 +11,7 @@ import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, TrendingUp, AlertCircle } from 'lucide-react'
 import { useMarket, useTrade, useWalletConnect } from '../../lib/web3/hooks.js'
 import { MARKET_STATE } from '../../lib/web3/contracts.js'
+import { translateError } from '../../lib/web3/translateError.js'
 import { formatUsdc, parseUsdc } from '../../lib/web3/format.js'
 
 export default function OnchainMarketDetailView() {
@@ -46,7 +47,7 @@ export default function OnchainMarketDetailView() {
       await buy({ questionId, investmentAmount: parseUsdc(investAmount), outcomeIndex: BigInt(outcomeIndex) })
       await refetch()
     } catch (err) {
-      setTradeError(err?.shortMessage ?? err?.message ?? 'La transacción falló.')
+      setTradeError(translateError(err) || 'La transacción falló.')
     }
   }
 

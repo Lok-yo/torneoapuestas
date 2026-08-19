@@ -6,11 +6,11 @@
 // off. See src/App.jsx and src/main.jsx.
 import { createConfig, http } from 'wagmi'
 import { polygonAmoy } from 'wagmi/chains'
-import { injected, walletConnect } from 'wagmi/connectors'
+import { injected, walletConnect, coinbaseWallet, safe } from 'wagmi/connectors'
 
 const walletConnectProjectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
 
-const connectors = [injected()]
+const connectors = [injected(), coinbaseWallet(), safe()]
 if (walletConnectProjectId) {
   connectors.push(walletConnect({ projectId: walletConnectProjectId }))
 }
