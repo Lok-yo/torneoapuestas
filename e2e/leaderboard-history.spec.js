@@ -22,10 +22,10 @@ test.describe('Leaderboard and player-history public projections', () => {
 
     await page.goto('/ranking')
 
-    await expect(page.getByText('jugador_top')).toBeVisible()
-    await expect(page.getByText('jugador_dos')).toBeVisible()
-    await expect(page.getByText('1050')).toBeVisible()
-    await expect(page.getByText('950')).toBeVisible()
+    await expect(page.getByText('jugador_top').first()).toBeVisible()
+    await expect(page.getByText('jugador_dos').first()).toBeVisible()
+    await expect(page.getByText('1050').first()).toBeVisible()
+    await expect(page.getByText('950').first()).toBeVisible()
   })
 
   test('a player profile shows rating and versioned history from an accepted official result', async ({ page }) => {
