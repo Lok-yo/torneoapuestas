@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import MainLayout from './layouts/MainLayout.jsx'
 import RequireAuth from './components/RequireAuth.jsx'
@@ -9,14 +9,15 @@ import TournamentsPage from './pages/TournamentsPage.jsx'
 import TournamentDetailPage from './pages/TournamentDetailPage.jsx'
 import OrganizerPanelPage from './pages/OrganizerPanelPage.jsx'
 import AdminPanelPage from './pages/AdminPanelPage.jsx'
-import MarketDetailPage from './pages/MarketDetailPage.jsx'
 import LeaderboardPage from './pages/LeaderboardPage.jsx'
 import PlayerProfilePage from './pages/PlayerProfilePage.jsx'
 import WalletPage from './pages/WalletPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
-import CreateMarketPage from './pages/CreateMarketPage.jsx'
 import { useSession } from './auth/SessionProvider.jsx'
 import { FEATURE_FLAGS } from './config/featureFlags.js'
+
+const MarketDetailPage = lazy(() => import('./pages/MarketDetailPage.jsx'))
+const CreateMarketPage = lazy(() => import('./pages/CreateMarketPage.jsx'))
 
 // A real Google OAuth sign-in returns the browser to "/", not wherever the
 // user clicked "sign in" from (unlike the old mock flow's inline
@@ -42,7 +43,8 @@ export default function App() {
   return (
     <>
       <OnboardingRedirect />
-      <Routes>
+      <Suspense fallback={<div className="py-12 text-center text-zinc-500">Cargando…</div>}>
+        <Routes>
         <Route element={<MainLayout />}>
           <Route index element={<HomePage />} />
           <Route path="login" element={<LoginPage />} />
@@ -92,7 +94,8 @@ export default function App() {
           <Route path="/crear-mercado" element={<Navigate to="/mercados/nuevo" replace />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
-      </Routes>
+        </Routes>
+      </Suspense>
     </>
   )
 }

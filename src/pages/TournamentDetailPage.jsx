@@ -7,7 +7,7 @@
 // a UX affordance only — the database grants and RPCs remain the real
 // authority, so a hidden/disabled control here is never itself a security
 // boundary. See tasks.md 3.13 and tournament-operations spec.
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { useParams, Link, Navigate } from 'react-router-dom'
 import { ArrowLeft, Users, Swords } from 'lucide-react'
 import { getTournament, getTournamentFormat } from '../repositories/tournamentRepository.js'
@@ -17,8 +17,9 @@ import GameTag from '../components/GameTag.jsx'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
 import TournamentPredictionWidget from '../components/TournamentPredictionWidget.jsx'
 import BracketSection from '../components/BracketSection.jsx'
-import CreateMarketModal from '../components/CreateMarketModal.jsx'
 import { toAppError } from '../lib/errors.js'
+
+const CreateMarketModal = lazy(() => import('../components/CreateMarketModal.jsx'))
 
 const TIMELINE = [
   { key: 'REGISTRATION_OPEN', label: 'Registro' },
@@ -137,11 +138,13 @@ export default function TournamentDetailPage() {
       )}
 
       {selectedSet && state.tournament && (
-        <CreateMarketModal
-          set={selectedSet}
-          startggEventId={state.tournament.startgg_event_id}
-          onClose={() => setSelectedSet(null)}
-        />
+        <Suspense fallback={<div className="py-12 text-center text-zinc-500">Cargando…</div>}>
+          <CreateMarketModal
+            set={selectedSet}
+            startggEventId={state.tournament.startgg_event_id}
+            onClose={() => setSelectedSet(null)}
+          />
+        </Suspense>
       )}
     </div>
   )

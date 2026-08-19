@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, TrendingUp, CheckCircle, AlertCircle, DollarSign, Award } from 'lucide-react'
 import { useSession } from '../auth/SessionProvider.jsx'
@@ -7,7 +7,8 @@ import { getWallet } from '../repositories/walletRepository.js'
 import { toAppError } from '../lib/errors.js'
 import { FEATURE_FLAGS } from '../config/featureFlags.js'
 import OnchainMarketDetailView from './onchain/OnchainMarketDetailView.jsx'
-import MarketPriceChart from '../components/MarketPriceChart.jsx'
+
+const MarketPriceChart = lazy(() => import('../components/MarketPriceChart.jsx'))
 
 export default function MarketDetailPage() {
   // Repointed on-chain when FEATURE_FLAGS.web3 is on (default off). The
@@ -204,7 +205,9 @@ function LegacyMarketDetailPage() {
               <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Tendencia de precio</h2>
               <span className="font-mono text-[11px] text-emerald-400">{Math.round(yesPrice * 100)}% SÍ</span>
             </div>
-            <MarketPriceChart priceHistory={snapshotHistory} />
+            <Suspense fallback={<div className="py-12 text-center text-zinc-500">Cargando…</div>}>
+              <MarketPriceChart priceHistory={snapshotHistory} />
+            </Suspense>
           </div>
 
           <div className="flex flex-col gap-4 border border-[#242424] bg-[#0c0c0c] p-6 shadow-xl backdrop-blur">
