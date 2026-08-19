@@ -79,8 +79,7 @@ export default function RightRail() {
       )}
 
       <p className="mt-auto border-t border-zinc-800 px-4 py-4 text-[11px] leading-relaxed text-zinc-500">
-        Crédito de mesa <span className="font-mono text-lime-400">TCRED</span> — ficha de simulación, sin valor
-        de cambio.
+        Ficha de simulación — sin valor de cambio.
       </p>
     </aside>
   )

@@ -94,7 +94,7 @@ export default function TournamentDetailPage() {
               bracket display below and the prediction markets widget remain
               live and unaffected. */}
 
-          <div className="flex border border-zinc-800 bg-zinc-950">
+          <div role="tablist" className="flex border border-zinc-800 bg-zinc-950">
             {[
               { id: 'descripcion', label: 'Descripción' },
               { id: 'brackets', label: 'Brackets' },
@@ -103,8 +103,12 @@ export default function TournamentDetailPage() {
               <button
                 key={item.id}
                 type="button"
+                role="tab"
+                aria-selected={tab === item.id}
+                aria-controls={`panel-${item.id}`}
+                id={`tab-${item.id}`}
                 onClick={() => setTab(item.id)}
-                className={`flex-1 px-3 py-2 text-[12px] font-bold uppercase tracking-wide ${
+                className={`flex-1 px-3 py-2 text-[12px] font-bold uppercase tracking-wide focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-rose-700 ${
                   tab === item.id
                     ? 'bg-zinc-900 text-rose-700 shadow-[inset_0_-2px_0_#be123c]'
                     : 'text-zinc-400 hover:text-zinc-100'
@@ -115,15 +119,19 @@ export default function TournamentDetailPage() {
             ))}
           </div>
 
-          {tab === 'descripcion' && <DescriptionPanel tournament={state.tournament} format={state.format} />}
+          {tab === 'descripcion' && <div id="panel-descripcion" role="tabpanel" aria-labelledby="tab-descripcion"><DescriptionPanel tournament={state.tournament} format={state.format} /></div>}
           {tab === 'brackets' && (
-            <BracketSection
-              tournamentId={state.tournament.id}
-              onSelectSet={setSelectedSet}
-            />
+            <div id="panel-brackets" role="tabpanel" aria-labelledby="tab-brackets">
+              <BracketSection
+                tournamentId={state.tournament.id}
+                onSelectSet={setSelectedSet}
+              />
+            </div>
           )}
           {tab === 'predicciones' && (
-            <TournamentPredictionWidget tournamentId={state.tournament.id} isOrganizer={isOrganizer} />
+            <div id="panel-predicciones" role="tabpanel" aria-labelledby="tab-predicciones">
+              <TournamentPredictionWidget tournamentId={state.tournament.id} isOrganizer={isOrganizer} />
+            </div>
           )}
         </>
       )}

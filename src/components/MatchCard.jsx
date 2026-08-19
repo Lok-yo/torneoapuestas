@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Trophy } from 'lucide-react'
+import { Trophy, TrendingUp } from 'lucide-react'
 
 const STATE_LABEL = {
   PENDING: 'Pendiente',
@@ -51,8 +51,9 @@ export default function MatchCard({ set: s, onSelect, disabled, hasMarket }) {
         {isPending && hasMarket && (
           <Link
             to={`/mercados/${s.startgg_set_id}`}
-            className="block px-2 py-1 text-center font-mono text-[10px] uppercase text-violet-400 hover:text-violet-300"
+            className="flex items-center justify-center gap-1 border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-center font-mono text-[10px] uppercase text-violet-400 hover:bg-violet-500/20 hover:text-violet-300"
           >
+            <TrendingUp size={10} />
             Mercado activo
           </Link>
         )}

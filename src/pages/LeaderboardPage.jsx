@@ -5,7 +5,7 @@
 // "Public leaderboard and privacy boundary".
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Crown, Search } from 'lucide-react'
+import { Crown, Search, Trophy } from 'lucide-react'
 import { getLeaderboard } from '../repositories/ratingRepository.js'
 import { getGameById } from '../data/games.js'
 import GameTabs from '../components/GameTabs.jsx'
@@ -66,9 +66,16 @@ export default function LeaderboardPage() {
       )}
 
       {status === 'ready' && list.length === 0 && (
-        <p className="py-12 text-center text-sm text-zinc-500">
-          Todavía no hay resultados oficiales que generen ranking.
-        </p>
+        <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <Trophy size={32} className="text-zinc-600" />
+          <h2 className="font-display text-lg font-bold text-zinc-300">Sin datos aún</h2>
+          <p className="max-w-xs text-[13px] text-zinc-500">
+            Todavía no hay resultados oficiales que generen ranking.
+          </p>
+          <Link to="/cartelera" className="mt-1 text-[12px] font-semibold text-rose-500 hover:text-rose-400">
+            Explorar torneos →
+          </Link>
+        </div>
       )}
 
       {status === 'ready' && filtered.length > 0 && (
