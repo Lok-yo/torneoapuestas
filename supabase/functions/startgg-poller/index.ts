@@ -101,6 +101,7 @@ const MX_TOURNAMENTS_QUERY = /* GraphQL */ `
         countryCode
         events {
           id
+          name
           startAt
           videogame { id }
           phases {
