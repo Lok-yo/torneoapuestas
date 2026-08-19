@@ -49,7 +49,7 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
         <div role="dialog" aria-modal="true" aria-labelledby="market-modal-title-connect" onClick={(e) => e.stopPropagation()} className="flex w-full max-w-md flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 text-center">
-          <p id="market-modal-title-connect" className="text-sm text-zinc-400">Conectá una wallet para crear un mercado.</p>
+          <p id="market-modal-title-connect" className="text-sm text-zinc-400">Conectá tu wallet para operar en este mercado.</p>
           {connectors.map((connector) => (
             <button
               key={connector.uid}
@@ -57,7 +57,7 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
               onClick={() => connect(connector)}
               className="rounded-xl bg-zinc-100 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-white"
             >
-              Conectar con {connector.name}
+              Conectar con {connector.name === 'Injected' ? 'MetaMask / Rabby' : connector.name}
             </button>
           ))}
           {connectError && (

@@ -125,7 +125,7 @@ export default function CreateMarketPage() {
             onClick={() => connect(connector)}
             className="rounded-xl bg-zinc-100 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-white"
           >
-            Conectar con {connector.name}
+            Conectar con {connector.name === 'Injected' ? 'MetaMask / Rabby' : connector.name}
           </button>
         ))}
         {connectError && (

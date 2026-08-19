@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import MainLayout from './layouts/MainLayout.jsx'
 import RequireAuth from './components/RequireAuth.jsx'
 import HomePage from './pages/HomePage.jsx'
@@ -88,6 +88,8 @@ export default function App() {
           <Route element={<RequireAuth role="admin" />}>
             <Route path="admin" element={<AdminPanelPage />} />
           </Route>
+          <Route path="/billetera" element={<Navigate to="/wallet" replace />} />
+          <Route path="/crear-mercado" element={<Navigate to="/mercados/nuevo" replace />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

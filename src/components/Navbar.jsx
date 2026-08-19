@@ -69,6 +69,7 @@ export default function Navbar({ onToggleNav }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar evento, juego, jugador…"
+            aria-label="Buscar evento, juego, jugador"
             className="h-8 w-full bg-transparent text-[13px] text-[#efece6] outline-none placeholder:text-[#5a5650]"
           />
         </label>
