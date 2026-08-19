@@ -1,21 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, PlusCircle, MinusCircle, RefreshCw, AlertCircle, Copy, Check } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, MinusCircle, RefreshCw, AlertCircle } from 'lucide-react'
 import { useSession } from '../auth/SessionProvider.jsx'
-import { getWallet, depositFunds, withdrawFunds, getTransactionHistory } from '../repositories/walletRepository.js'
+import { getWallet, withdrawFunds, getTransactionHistory } from '../repositories/walletRepository.js'
 import { formatDateTime } from '../lib/format.js'
 import { toAppError } from '../lib/errors.js'
-import { FEATURE_FLAGS } from '../config/featureFlags.js'
-import OnchainWalletView from './onchain/OnchainWalletView.jsx'
-import { MARKET_FACTORY_ADDRESS } from '../lib/web3/contracts.js'
 
 export default function WalletPage() {
-  // Repointed on-chain when FEATURE_FLAGS.web3 is on (default off — see
-  // design.md Decision 7 / File Changes). Off by default, this route's
-  // behavior is byte-identical to before this change.
-  if (FEATURE_FLAGS.web3) {
-    return <OnchainWalletView />
-  }
-
   return <LegacyWalletPage />
 }
 
@@ -81,58 +71,13 @@ function ModalDialog({ labelledBy, onClose, children }) {
   )
 }
 
-function ContractStatusCard() {
-  const [copied, setCopied] = useState(false)
-  const hash = MARKET_FACTORY_ADDRESS
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(hash)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1600)
-    } catch {
-      setCopied(false)
-    }
-  }
-
-  return (
-    <div className="border border-[#242424] bg-[#0c0c0c] p-5">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#b11226]">Red / Contrato</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-white/5 bg-black/30 p-3">
-          <p className="text-[11px] text-zinc-500">Wallet</p>
-          <p className="mt-1 text-sm font-semibold text-zinc-200">Desconectada</p>
-        </div>
-        <div className="rounded-xl border border-white/5 bg-black/30 p-3">
-          <p className="text-[11px] text-zinc-500">Red</p>
-          <p className="mt-1 text-sm font-semibold text-[#edeae3]">Polygon Amoy</p>
-        </div>
-        <div className="rounded-xl border border-white/5 bg-black/30 p-3">
-          <p className="text-[11px] text-zinc-500">Smart contract</p>
-          <button
-            type="button"
-            onClick={copy}
-            className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-zinc-300 hover:text-white"
-            title="Copiar hash"
-          >
-            {hash.slice(0, 6)}…{hash.slice(-4)}
-            {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function LegacyWalletPage() {
   const { profile } = useSession()
   const [walletState, setWalletState] = useState({ status: 'loading', wallet: null, transactions: [], error: null })
-  const [depositAmount, setDepositAmount] = useState('50')
   const [withdrawAmount, setWithdrawAmount] = useState('20')
   const [actionError, setActionError] = useState(null)
   const [actionPending, setActionPending] = useState(false)
-  const [activeModal, setActiveModal] = useState(null) // 'deposit' | 'withdraw' | null
-  const [mode, setMode] = useState('tcred')
+  const [activeModal, setActiveModal] = useState(null) // 'withdraw' | null
 
   const loadData = async () => {
     setWalletState((prev) => ({ ...prev, status: 'loading', error: null }))
@@ -147,26 +92,6 @@ function LegacyWalletPage() {
   useEffect(() => {
     loadData()
   }, [])
-
-  const handleDeposit = async (e) => {
-    e.preventDefault()
-    const num = parseFloat(depositAmount)
-    if (isNaN(num) || num <= 0) {
-      setActionError('Ingresá un monto válido para depositar.')
-      return
-    }
-    setActionPending(true)
-    setActionError(null)
-    try {
-      await depositFunds(num, `dep_${Date.now().toString(36)}`)
-      setActiveModal(null)
-      await loadData()
-    } catch (err) {
-      setActionError(toAppError(err).message)
-    } finally {
-      setActionPending(false)
-    }
-  }
 
   const handleWithdraw = async (e) => {
     e.preventDefault()
@@ -254,46 +179,7 @@ function LegacyWalletPage() {
         </button>
       </div>
 
-      <div className="inline-flex w-fit border border-[#242424] bg-[#0c0c0c] p-1">
-        <button
-          type="button"
-          onClick={() => setMode('tcred')}
-          className={`rounded-xl px-4 py-1.5 text-xs font-bold tracking-wide transition ${
-            mode === 'tcred'
-              ? 'bg-[#b11226] text-white'
-              : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          TCRED
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode('web3')}
-          className={`rounded-xl px-4 py-1.5 text-xs font-bold tracking-wide transition ${
-            mode === 'web3'
-              ? 'bg-emerald-500 text-zinc-950 shadow-[0_0_20px_-6px_rgba(16,185,129,0.9)]'
-              : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          USDC / Polygon
-        </button>
-      </div>
-
-      {mode === 'web3' ? (
-        <div className="flex flex-col gap-4">
-          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-6">
-            <p className="text-xs uppercase tracking-wider text-emerald-300">On-chain</p>
-            <h2 className="mt-1 text-lg font-semibold text-zinc-50">Billetera Web3 en espera</h2>
-            <p className="mt-2 max-w-xl text-sm text-zinc-400">
-              El panel on-chain de Polygon Amoy se activa cuando el flag Web3 está habilitado. Esta vista no
-              conecta wallets ni mueve fondos.
-            </p>
-          </div>
-          <ContractStatusCard />
-        </div>
-      ) : (
-        <>
-          <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3">
             <div className="flex flex-col justify-between border border-[#242424] bg-[#0c0c0c] p-6 sm:col-span-2">
               <div>
                 <span className="text-xs uppercase tracking-wider text-zinc-400">Saldo Total</span>
@@ -317,16 +203,6 @@ function LegacyWalletPage() {
                 type="button"
                 onClick={() => {
                   setActionError(null)
-                  setActiveModal('deposit')
-                }}
-                className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 py-3 text-sm font-semibold text-zinc-900 hover:bg-white"
-              >
-                <PlusCircle size={18} /> Depositar Fondos
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActionError(null)
                   setActiveModal('withdraw')
                 }}
                 className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 py-3 text-sm font-semibold text-zinc-200 hover:border-zinc-500"
@@ -335,8 +211,6 @@ function LegacyWalletPage() {
               </button>
             </div>
           </div>
-
-          <ContractStatusCard />
 
           <div>
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500">
@@ -394,57 +268,8 @@ function LegacyWalletPage() {
               </div>
             )}
           </div>
-        </>
-      )}
-
-      {activeModal === 'deposit' && (
-        <ModalDialog labelledBy="deposit-modal-title" onClose={() => setActiveModal(null)}>
-          <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6">
-            <h3 id="deposit-modal-title" className="text-lg font-bold text-zinc-50">
-              Depositar Saldo
-            </h3>
-            <p className="mt-1 text-xs text-zinc-400">
-              Ingresá el monto a acreditar en tu cuenta para participar en mercados de predicción.
-            </p>
-
-            <form onSubmit={handleDeposit} className="mt-6 flex flex-col gap-4">
-              <div>
-                <label htmlFor="deposit-amount-input" className="mb-1 block text-xs font-medium text-zinc-400">
-                  Monto (USD)
-                </label>
-                <input
-                  id="deposit-amount-input"
-                  type="number"
-                  step="0.01"
-                  min="1"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500"
-                />
-              </div>
-
-              {actionError && <p className="text-xs text-rose-400">{actionError}</p>}
-
-              <div className="mt-2 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setActiveModal(null)}
-                  className="flex-1 rounded-xl border border-zinc-800 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-900"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={actionPending}
-                  className="flex-1 rounded-xl bg-zinc-100 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-white disabled:opacity-50"
-                >
-                  {actionPending ? 'Procesando…' : 'Confirmar Depósito'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </ModalDialog>
-      )}
+        </div>
+      </div>
 
       {activeModal === 'withdraw' && (
         <ModalDialog labelledBy="withdraw-modal-title" onClose={() => setActiveModal(null)}>
