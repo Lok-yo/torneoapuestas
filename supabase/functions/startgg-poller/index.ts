@@ -42,9 +42,14 @@ interface StartggPhase {
   name: string
 }
 
+interface StartggVideogame {
+  id: number
+}
+
 interface StartggEvent {
   id: string
   startAt: number | null
+  videogame?: StartggVideogame
   phases?: { nodes: StartggPhase[] }
 }
 
@@ -97,6 +102,7 @@ const MX_TOURNAMENTS_QUERY = /* GraphQL */ `
         events {
           id
           startAt
+          videogame { id }
           phases {
             id
             name
@@ -106,6 +112,16 @@ const MX_TOURNAMENTS_QUERY = /* GraphQL */ `
     }
   }
 `
+
+// start.gg videogame.id → { game_id, format_id } for tournament_formats (migration 0026)
+const STARTGG_GAME_TO_GG_GAME: Record<number, { game_id: string; format_id: string }> = {
+  1386: { game_id: 'ssbu', format_id: '00000000-0000-0000-0000-000000000001' },
+  1: { game_id: 'melee', format_id: '00000000-0000-0000-0000-000000000002' },
+  43868: { game_id: 'sf6', format_id: '00000000-0000-0000-0000-000000000003' },
+  62790: { game_id: 'fatal-fury', format_id: '00000000-0000-0000-0000-000000000004' },
+  49783: { game_id: 'tekken8', format_id: '00000000-0000-0000-0000-000000000005' },
+  53945: { game_id: 'roa2', format_id: '00000000-0000-0000-0000-000000000006' },
+}
 
 const PHASE_SETS_QUERY = /* GraphQL */ `
   query PhaseSets($phaseId: ID!, $page: Int!, $perPage: Int!) {
@@ -231,27 +247,32 @@ Deno.serve(async (req) => {
 
   let ingestedSets = 0
   let skippedEvents = 0
+  let unsupportedGames = 0
   try {
     for (const tournament of processed) {
-      const tournamentId = await deterministicUuid(`startgg-tournament:${tournament.id}`)
-      const firstEventId = tournament.events?.[0]?.id ? Number(tournament.events[0].id) : null
-      await supabase.from('tournaments').upsert(
-        {
-          id: tournamentId,
-          organizer_id: Deno.env.get('STARTGG_SHADOW_ORGANIZER_ID'),
-          game_id: 'ssbu',
-          format_id: '00000000-0000-0000-0000-000000000001',
-          name: tournament.name,
-          status: 'IN_PROGRESS',
-          // tournaments.startgg_event_id (0024) backs the Create-Market
-          // combobox; a start.gg tournament may hold several events, so
-          // the first one stands in as the tournament's lookup key.
-          ...(firstEventId != null ? { startgg_event_id: firstEventId } : {}),
-        },
-        { onConflict: 'id', ignoreDuplicates: false },
-      )
-
       for (const event of tournament.events ?? []) {
+        const gameId = event.videogame?.id
+        const mapping = gameId != null ? STARTGG_GAME_TO_GG_GAME[gameId] : undefined
+
+        if (!mapping) {
+          unsupportedGames++
+          log.info({ requestId, event: 'startgg_poller.unsupported_game', eventId: event.id, videogameId: gameId, tournamentName: tournament.name })
+          continue
+        }
+
+        const tournamentId = await deterministicUuid(`startgg-event:${event.id}`)
+        await supabase.from('tournaments').upsert(
+          {
+            id: tournamentId,
+            organizer_id: Deno.env.get('STARTGG_SHADOW_ORGANIZER_ID'),
+            game_id: mapping.game_id,
+            format_id: mapping.format_id,
+            name: `${tournament.name} — ${event.name}`,
+            status: 'IN_PROGRESS',
+            ...(event.id ? { startgg_event_id: Number(event.id) } : {}),
+          },
+          { onConflict: 'id', ignoreDuplicates: false },
+        )
         const phases = Array.isArray((event as unknown as { phases: unknown }).phases)
           ? (event as unknown as { phases: StartggPhase[] }).phases
           : (event as unknown as { phases: { nodes: StartggPhase[] } }).phases?.nodes ?? []
@@ -314,11 +335,12 @@ Deno.serve(async (req) => {
     processed: processed.length,
     deferred: deferred.length,
     skippedEvents,
+    unsupportedGames,
     ingestedSets,
   })
 
   return new Response(
-    JSON.stringify({ status: 'ok', processed: processed.length, deferred: deferred.length, skippedEvents, ingestedSets }),
+    JSON.stringify({ status: 'ok', processed: processed.length, deferred: deferred.length, skippedEvents, unsupportedGames, ingestedSets }),
     { status: 200, headers: { 'content-type': 'application/json' } },
   )
 })
