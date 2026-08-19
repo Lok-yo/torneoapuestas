@@ -98,10 +98,8 @@ const MX_TOURNAMENTS_QUERY = /* GraphQL */ `
           id
           startAt
           phases {
-            nodes {
-              id
-              name
-            }
+            id
+            name
           }
         }
       }
@@ -254,7 +252,10 @@ Deno.serve(async (req) => {
       )
 
       for (const event of tournament.events ?? []) {
-        const phase = pickPhase(event.phases?.nodes)
+        const phases = Array.isArray((event as unknown as { phases: unknown }).phases)
+          ? (event as unknown as { phases: StartggPhase[] }).phases
+          : (event as unknown as { phases: { nodes: StartggPhase[] } }).phases?.nodes ?? []
+        const phase = pickPhase(phases)
         if (!phase) {
           skippedEvents++
           log.info({ requestId, event: 'startgg_poller.phase_skipped', eventId: event.id })
