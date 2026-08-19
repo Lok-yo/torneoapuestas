@@ -179,14 +179,19 @@ export async function claimOrganizerRole() {
 /**
  * Searches tournaments by name or game_id, returning only those linked
  * to a start.gg event. Used by the Create-Market combobox.
+ *
+ * SECURITY: We escape `, %, ., (, ), _, \` before interpolation into a
+ * PostgREST `ilike` filter so user input cannot inject PostgREST filter
+ * operators or wildcards.
  * @param {string} query – free-text search term
  * @returns {Promise<Array<object>>} up to 10 results
  */
 export async function searchTournaments(query) {
   assertConfigured()
-  if (!query || query.trim().length < 2) return []
+  const raw = String(query ?? '').trim().slice(0, 100)
+  if (raw.length < 2) return []
 
-  const escaped = query.replace(/[,%.()_\\]/g, (c) => `\\${c}`)
+  const escaped = raw.replace(/[,%.()_\\]/g, (c) => `\\${c}`)
   const { data, error } = await supabase
     .from('tournaments')
     .select(TOURNAMENT_FIELDS)
