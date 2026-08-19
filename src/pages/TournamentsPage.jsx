@@ -2,15 +2,14 @@
 // no fixture fallback. See tasks.md 3.13 and tournament-operations spec
 // "Public projection and closed perimeter".
 import { useMemo } from 'react'
-import { useAsync } from '../lib/useAsync.js'
 import { Link, useSearchParams } from 'react-router-dom'
-import { listTournaments } from '../repositories/tournamentRepository.js'
 import { getGameById, GAMES } from '../data/games.js'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
 import GameCover from '../components/GameCover.jsx'
+import { useTournaments } from '../hooks/useTournaments.js'
 
 export default function TournamentsPage() {
-  const { status, data: tournaments, error } = useAsync(() => listTournaments(), [])
+  const { status, data: tournaments, error } = useTournaments()
   const [params, setParams] = useSearchParams()
   const gameFilter = params.get('juego')
   const q = (params.get('q') || '').trim().toLowerCase()
@@ -72,6 +71,8 @@ export default function TournamentsPage() {
         <p className="py-10 text-center text-[13px] text-[#6f6b64]">Todavía no hay torneos publicados.</p>
       )}
 
+      {/* TODO: TournamentCard component was retired (dead code, legacy model).
+          Tournament rows are rendered inline here and in HomePage. */}
       {status === 'ready' && rows.length > 0 && (
         <div className="border border-[#242424]">
           <div className="hidden grid-cols-[56px_1fr_auto_auto] gap-3 border-b border-[#242424] px-4 py-2 text-[10px] uppercase tracking-[0.16em] text-[#6f6b64] sm:grid">

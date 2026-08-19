@@ -1,15 +1,15 @@
 import { Link } from 'react-router-dom'
-import { listTournaments } from '../repositories/tournamentRepository.js'
 import { listMarkets } from '../repositories/marketRepository.js'
 import { useAsync } from '../lib/useAsync.js'
 import { getGameById } from '../data/games.js'
 import GameCover from './GameCover.jsx'
 import TournamentStatusBadge from './TournamentStatusBadge.jsx'
+import { useTournaments } from '../hooks/useTournaments.js'
 
 const LIVE = new Set(['IN_PROGRESS', 'REGISTRATION_OPEN'])
 
 export default function RightRail() {
-  const { data: tournaments } = useAsync(() => listTournaments(), [])
+  const { data: tournaments } = useTournaments()
   const { data: markets } = useAsync(() => listMarkets().catch(() => []), [])
 
   const live = (tournaments ?? []).filter((t) => LIVE.has(t.status)).slice(0, 5)

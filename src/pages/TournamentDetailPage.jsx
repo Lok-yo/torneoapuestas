@@ -212,7 +212,7 @@ function TournamentHeader({ tournament, format }) {
               <Swords size={13} />
               Mejor de {format.best_of}
             </span>
-            <span>Eliminación simple</span>
+            <span>{format.bracket_type === 'single_elimination' ? 'Eliminación simple' : format.bracket_type || 'Eliminación simple'}</span>
           </div>
         )}
       </div>

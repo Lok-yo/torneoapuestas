@@ -1,19 +1,19 @@
 import { Link } from 'react-router-dom'
 import { GAMES } from '../data/games.js'
 import { useSession } from '../auth/SessionProvider.jsx'
-import { listTournaments } from '../repositories/tournamentRepository.js'
 import { listMarkets } from '../repositories/marketRepository.js'
 import { FEATURE_FLAGS } from '../config/featureFlags.js'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
 import GameCover from '../components/GameCover.jsx'
 import { useAsync } from '../lib/useAsync.js'
+import { useTournaments } from '../hooks/useTournaments.js'
 
 const ACTIVE = new Set(['REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'IN_PROGRESS'])
 
 export default function HomePage() {
   const { status, profile } = useSession()
   const isAuthenticated = status === 'authenticated' && Boolean(profile?.username)
-  const { status: boardStatus, data: allTournaments } = useAsync(() => listTournaments(), [])
+  const { status: boardStatus, data: allTournaments } = useTournaments()
   const { data: markets } = useAsync(() => listMarkets().catch(() => []), [])
   const tournaments = allTournaments ?? []
   const live = tournaments.filter((t) => t.status === 'IN_PROGRESS')
