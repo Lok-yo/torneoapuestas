@@ -1,125 +1,129 @@
-# TorneoApuestas — Fighting Games Tournament Platform & P2P Prediction Markets
+# GG2: Smash Bros. Prediction Markets & Tournament Platform
 
-A production-ready esports tournament and prediction-market platform. Built with React 19 + Vite, backed by Supabase (Postgres + Row-Level Security + Auth + Edge Functions), Solidity contracts (Foundry + Gnosis Conditional Tokens Framework on Polygon Amoy), and wagmi/viem.
+GG2 es una plataforma open-source de esports construida en torno a la escena competitiva de *Super Smash Bros. Ultimate*. Combina la importación de torneos en tiempo real desde start.gg con un sistema de calificación ELO para los jugadores y mercados de predicción peer-to-peer integrados en la blockchain.
 
-- **Tournament Engine**: Automatic ingestion of esports tournaments from the **start.gg** API (filtered by region/game), automated bracket lifecycle, official results, and player Elo ratings.
-- **P2P Prediction Markets**: Non-custodial prediction markets on Polygon Amoy testnet using USDC collateral and Gnosis CTF. Includes permissionless market creation, relayer result posting, challenge windows, bond accounting, and multisig arbitration.
-- **Identity & Security**: Supabase Auth with Google OAuth, atomic case-insensitive `@username` claim, optional 1:1 SIWE wallet linking, and strict RLS database grants.
+## 🚀 Características Principales
 
----
-
-## 🔐 Security & Accounting Fixes (Migration 0022)
-
-Applied security hardening based on PDF audit findings:
-
-1. **Market Resolution Ownership Validation**: `resolve_market()` now validates that the caller is either an admin, the market creator, OR the tournament organizer. Prevents unauthorized market resolution by other organizers.
-
-2. **Weighted Average Price Calculation**: `buy_market_shares()` now correctly recalculates the weighted average price when a user purchases additional shares of an existing position:
-   ```
-   new_avg_price = ((old_shares * old_avg_price) + (new_shares * buy_price)) / total_shares
-   ```
-
-3. **Test Coverage**: Added `audit_fixes.sql` pgTAP suite with 4 assertions validating ownership enforcement and price calculation.
+- **Motor de Torneos**: Importación automática de torneos de esports desde la API de **start.gg** (filtrados por región/juego), ciclo de vida automatizado de las llaves, resultados oficiales y calificaciones Elo de los jugadores.
+- **Mercados de Predicción P2P**: Mercados de predicción sin custodia en la red de pruebas Polygon Amoy utilizando colateral en USDC y CTF de Gnosis. Incluye creación de mercados sin permisos, publicación de resultados mediante relayers, ventanas de disputa, contabilidad de fianzas (bonds) y arbitraje multifirma.
+- **Identidad y Seguridad**: Autenticación con Supabase (Google OAuth), reserva atómica de `@usuario` (sin distinguir mayúsculas/minúsculas), vinculación opcional 1:1 de billeteras SIWE y políticas estrictas de seguridad a nivel de fila (RLS).
 
 ---
 
-## 🛠️ Environment and Setup Contract
+## 🔐 Correcciones de Seguridad y Contabilidad (Migración 0022)
 
-Copy `.env.example` to `.env.local` (git-ignored) and fill in your Supabase & Web3 variables. **Never commit a real `.env` or service-role key.**
+Se aplicó un endurecimiento de seguridad basado en los hallazgos de la auditoría en PDF:
 
-### Client Environment Variables (Vite, `VITE_*`)
+1. **Validación de Propiedad en la Resolución de Mercados**: `resolve_market()` ahora valida que quien llama a la función sea un administrador, el creador del mercado O el organizador del torneo. Evita la resolución no autorizada por parte de otros organizadores.
 
-| Variable | Required | Default | Description |
+2. **Cálculo del Precio Promedio Ponderado**: `buy_market_shares()` ahora recalcula correctamente el precio promedio ponderado cuando un usuario compra acciones adicionales de una posición existente:
+   ```
+   nuevo_precio_promedio = ((acciones_viejas * precio_promedio_viejo) + (acciones_nuevas * precio_compra)) / total_acciones
+   ```
+
+3. **Cobertura de Pruebas**: Se agregó la suite pgTAP `audit_fixes.sql` con 4 aserciones que validan el cumplimiento de la propiedad y el cálculo de precios.
+
+---
+
+## 🛠️ Entorno y Configuración
+
+Copia `.env.example` a `.env.local` (ignorado por git) y completa tus variables de Supabase y Web3. **Nunca subas un archivo `.env` real o una clave de service-role a GitHub.**
+
+### Variables de Entorno del Cliente (Vite, `VITE_*`)
+
+| Variable | Requerida | Por defecto | Descripción |
 |---|---|---|---|
-| `VITE_SUPABASE_URL` | **Yes** | — | Public Supabase project URL (`https://<project_ref>.supabase.co`). |
-| `VITE_SUPABASE_ANON_KEY` | **Yes** | — | Public anon API key for client-side Supabase calls. |
-| `VITE_FEATURE_WEB3` | No | `false` | Set to `true` to enable the on-chain Web3 prediction markets, wallet connection, `/mercados/nuevo` route, and admin panel. |
-| `VITE_FEATURE_IDENTITY` | No | `true` | Set to `false` to emergency-disable the Supabase identity adapter. |
-| `VITE_FEATURE_TOURNAMENTS` | No | `true` | Set to `false` to emergency-disable the tournament/bracket adapter. |
-| `VITE_FEATURE_RATINGS` | No | `true` | Set to `false` to emergency-disable the ratings/leaderboard adapter. |
-| `VITE_MARKET_FACTORY_ADDRESS` | No | Amoy default | Address of deployed `MarketFactory.sol` on Polygon Amoy. |
-| `VITE_RESOLUTION_ADAPTER_ADDRESS` | No | Amoy default | Address of deployed `ResolutionAdapter.sol` on Polygon Amoy. |
-| `VITE_USDC_ADDRESS` | No | Amoy default | Testnet USDC ERC-20 token address on Polygon Amoy. |
-| `VITE_CTF_ADDRESS` | No | Amoy default | Gnosis `ConditionalTokens` singleton contract address on Polygon Amoy. |
+| `VITE_SUPABASE_URL` | **Sí** | — | URL pública del proyecto de Supabase (`https://<project_ref>.supabase.co`). |
+| `VITE_SUPABASE_ANON_KEY` | **Sí** | — | Clave API pública (anon) para llamadas a Supabase desde el cliente. |
+| `VITE_FEATURE_WEB3` | No | `false` | Establecer en `true` para habilitar los mercados de predicción on-chain, conexión de billeteras, la ruta `/mercados/nuevo` y el panel de administración. |
+| `VITE_FEATURE_IDENTITY` | No | `true` | Establecer en `false` para desactivar de emergencia el adaptador de identidad de Supabase. |
+| `VITE_FEATURE_TOURNAMENTS` | No | `true` | Establecer en `false` para desactivar de emergencia el adaptador de torneos/llaves. |
+| `VITE_FEATURE_RATINGS` | No | `true` | Establecer en `false` para desactivar de emergencia el adaptador de calificaciones/clasificación. |
+| `VITE_MARKET_FACTORY_ADDRESS` | No | Amoy (defecto) | Dirección del contrato `MarketFactory.sol` desplegado. |
+| `VITE_RESOLUTION_ADAPTER_ADDRESS` | No | Amoy (defecto)| Dirección del contrato `ResolutionAdapter.sol` desplegado. |
+| `VITE_USDC_ADDRESS` | No | Amoy (defecto)| Dirección del token USDC ERC-20 (Testnet). |
+| `VITE_CTF_ADDRESS` | No | Amoy (defecto)| Dirección del contrato singleton `ConditionalTokens` de Gnosis. |
 
 ---
 
-## 🔑 Google OAuth Setup (Supabase + Google Cloud)
+## 🔑 Configuración de Google OAuth (Supabase + Google Cloud)
 
-To enable Google sign-in locally and in production:
+Para habilitar el inicio de sesión con Google (localmente y en producción):
 
 1. **Google Cloud Console**:
-   - Go to [Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials).
-   - Create an **OAuth 2.0 Client ID** (Web application).
-   - Add Authorized Redirect URI: `https://<your-supabase-project-ref>.supabase.co/auth/v1/callback`
+   - Ve a [Credenciales de Google Cloud Console](https://console.cloud.google.com/apis/credentials).
+   - Crea un **ID de cliente OAuth 2.0** (Aplicación web).
+   - Añade la URI de redirección autorizada: `https://<tu-project-ref-de-supabase>.supabase.co/auth/v1/callback`
 
-2. **Supabase Dashboard**:
-   - Go to **Authentication -> Providers -> Google**.
-   - Enable Google and paste your Client ID and Client Secret.
-   - Go to **Authentication -> URL Configuration**:
-     - Set **Site URL**: `http://localhost:5173/`
-     - Add to **Redirect URLs**: `http://localhost:5173/` and `http://localhost:5173`
+2. **Panel de Supabase**:
+   - Ve a **Authentication -> Providers -> Google**.
+   - Habilita Google y pega tu ID de Cliente y Secreto de Cliente.
+   - Ve a **Authentication -> URL Configuration**:
+     - Establece **Site URL**: `http://localhost:5173/`
+     - Añade a **Redirect URLs**: `http://localhost:5173/` y `http://localhost:5173`
 
 ---
 
-## ⛽ Web3 Local Development (Anvil)
+## ⛽ Desarrollo Local Web3 (Anvil)
 
-To test the prediction markets locally without dealing with testnet faucets or real funds, we use Foundry's `anvil` local node simulating Polygon Amoy.
+Para probar los mercados de predicción localmente sin lidiar con faucets de redes de prueba o fondos reales, usamos el nodo local `anvil` de Foundry simulando Polygon Amoy.
 
-1. **Start the Local Node:**
+1. **Inicia el Nodo Local:**
    ```bash
    anvil --chain-id 80002
    ```
-2. **Deploy Contracts & Mint Fake USDC:**
-   Run the local deployment script to deploy the core contracts and mint 1,000,000 fake USDC to your wallet:
+2. **Despliega los Contratos y Acuña USDC Falso:**
+   Ejecuta el script de despliegue local para compilar los contratos principales y acuñar 1.000.000 USDC falsos en tu billetera:
    ```bash
    cd contracts
    forge script script/DeployLocal.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
    ```
-3. **Configure the Frontend:**
-   Update your `.env.local` with the deployed addresses and set the RPC to your local node:
+3. **Configura el Frontend:**
+   Actualiza tu archivo `.env.local` con las direcciones desplegadas y ajusta el RPC a tu nodo local:
    ```env
    VITE_AMOY_RPC_URL=http://127.0.0.1:8545
-   VITE_CTF_ADDRESS=<deployed-ctf-address>
-   VITE_USDC_ADDRESS=<deployed-usdc-address>
-   VITE_FPMM_FACTORY_ADDRESS=<deployed-fpmm-factory-address>
-   VITE_MARKET_FACTORY_ADDRESS=<deployed-market-factory-address>
-   VITE_RESOLUTION_ADAPTER_ADDRESS=<deployed-resolution-adapter-address>
+   VITE_CTF_ADDRESS=<dirección-del-ctf>
+   VITE_USDC_ADDRESS=<dirección-de-usdc>
+   VITE_FPMM_FACTORY_ADDRESS=<dirección-del-fpmm-factory>
+   VITE_MARKET_FACTORY_ADDRESS=<dirección-del-market-factory>
+   VITE_RESOLUTION_ADAPTER_ADDRESS=<dirección-del-resolution-adapter>
    ```
-4. **Connect MetaMask:**
-   Add or edit the Polygon Amoy network in MetaMask to point to `http://127.0.0.1:8545`.
+4. **Conecta MetaMask:**
+   Añade o edita la red Polygon Amoy en MetaMask para que apunte a `http://127.0.0.1:8545`.
 
-*Note: The minimum market creation cost is set to **2 USDC** (1 USDC Creation Bond + 1 USDC Seed Liquidity).*
+*Nota: El costo mínimo para crear un mercado está configurado en **2 USDC** (1 USDC de Bono de Creación + 1 USDC de Liquidez Inicial).*
 
-## 💻 Local Development
+---
+
+## 💻 Desarrollo Local (Frontend y Backend)
 
 ```bash
-npm ci                 # Frozen install
-npm run dev             # Start Vite development server (http://localhost:5173)
-npm run lint            # Run oxlint linter
-npm run test            # Run Vitest unit & repository test suite
-npm run build           # Production bundle build
-npm run preview         # Preview local production build (http://localhost:4173)
+npm ci                 # Instalación congelada (con package-lock)
+npm run dev             # Inicia el servidor de desarrollo Vite (http://localhost:5173)
+npm run lint            # Ejecuta el linter oxlint
+npm run test            # Ejecuta la suite de pruebas unitarias y de repositorios (Vitest)
+npm run build           # Construye el bundle de producción
+npm run preview         # Previsualiza la build de producción localmente (http://localhost:4173)
 ```
 
 ---
 
-## 🧪 Testing Architecture & CI Pipeline
+## 🧪 Arquitectura de Pruebas y Pipeline CI
 
-The project enforces a 100% passing 9-job CI gate chain in `.github/workflows/ci.yml`:
+El proyecto aplica una cadena de validación CI de 9 trabajos en `.github/workflows/ci.yml` que debe pasar al 100%:
 
-| Layer | Command | Scope & Coverage |
+| Capa | Comando | Alcance y Cobertura |
 |---|---|---|
-| **Unit & Repositories** | `npm run test` | Vitest + React Testing Library + V8 coverage (81.6%+ lines). |
-| **Postgres / pgTAP** | `npm run test:db` (`supabase test db`) | 16 pgTAP suites (144 assertions) covering RLS deny-by-default, RPC idempotency, username claim race, security alerts, and wallet cache. |
-| **End-to-End** | `npm run test:e2e` (`playwright test`) | 25 Playwright specs covering OAuth sign-in, tournament lifecycle, rating history, routing threat matrix, and Web3 flag gates. |
-| **Solidity Fuzzing** | `forge test --fuzz-runs 256` | Foundry fuzzing & invariant suite for `MarketFactory.sol` and `ResolutionAdapter.sol`. |
-| **Solidity Static Analysis** | `slither` | Slither security analysis for reentrancy, access control, and state integrity in `contracts/`. |
-| **Quality & Audit** | `oxlint`, `npm audit` | Code style enforcement and dependency vulnerability scanning. |
+| **Unitarias y Repositorios** | `npm run test` | Vitest + React Testing Library + cobertura V8 (81.6%+ de líneas). |
+| **Postgres / pgTAP** | `npm run test:db` (`supabase test db`) | 16 suites pgTAP (144 aserciones) cubriendo RLS por defecto, idempotencia RPC, concurrencia en la reserva de usernames, alertas de seguridad y caché de billeteras. |
+| **End-to-End** | `npm run test:e2e` (`playwright test`) | 25 especificaciones Playwright cubriendo inicio de sesión OAuth, ciclo de vida de torneos, historial de calificaciones, matriz de amenazas de enrutamiento y bloqueos lógicos Web3. |
+| **Solidity Fuzzing** | `forge test --fuzz-runs 256` | Fuzzing y suite de invariantes de Foundry para `MarketFactory.sol` y `ResolutionAdapter.sol`. |
+| **Análisis Estático (Solidity)** | `slither` | Análisis de seguridad de Slither para reentrancia, control de acceso e integridad del estado en `contracts/`. |
+| **Calidad y Auditoría** | `oxlint`, `npm audit` | Aplicación de estilo de código y escaneo de vulnerabilidades de dependencias. |
 
 ---
 
-## 🏛️ Architecture Overview
+## 🏛️ Resumen de la Arquitectura
 
 ```
                         ┌─────────────────────────┐
@@ -130,8 +134,8 @@ The project enforces a 100% passing 9-job CI gate chain in `.github/workflows/ci
            ┌─────────────────────────┼─────────────────────────┐
            ▼                         ▼                         ▼
 ┌────────────────────┐    ┌────────────────────┐    ┌────────────────────┐
-│   Supabase Auth    │    │  Supabase Postgres │    │  Polygon Amoy CTF  │
-│  (Google + Profile)│    │  (RLS + RPCs + DB) │    │(MarketFactory.sol) │
+│   Auth Supabase    │    │ Postgres Supabase  │    │  Polygon Amoy CTF  │
+│  (Google + Perfil) │    │  (RLS + RPCs + DB) │    │(MarketFactory.sol) │
 └────────────────────┘    └────────────────────┘    └────────────────────┘
                                      ▲                         ▲
                                      │                         │
@@ -141,12 +145,12 @@ The project enforces a 100% passing 9-job CI gate chain in `.github/workflows/ci
                           └─────────────────────┘   └─────────────────────┘
 ```
 
-- **Database RLS**: Every table uses strict Row-Level Security with explicit `REVOKE ALL` and role-based policy grants.
-- **Idempotency**: All state-modifying RPCs require a `p_request_id` to enforce at-most-once execution under retries.
-- **Append-only Audit**: Sensitive actions and migration events emit immutable audit records in `audit_events`, `migration_events`, and `security_alerts`.
+- **Database RLS**: Cada tabla utiliza Políticas de Seguridad a Nivel de Fila (RLS) estrictas con un `REVOKE ALL` explícito y permisos basados en roles.
+- **Idempotencia**: Todas las RPC que modifican estado requieren un `p_request_id` para garantizar su ejecución como máximo una vez (at-most-once) frente a reintentos.
+- **Auditoría Append-only**: Las acciones sensibles y eventos de migración emiten registros inmutables en `audit_events`, `migration_events` y `security_alerts`.
 
 ---
 
-## 📜 License
+## 📜 Licencia
 
-MIT License.
+Licencia MIT.
