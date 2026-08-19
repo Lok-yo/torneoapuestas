@@ -35,6 +35,15 @@ export default function CreateMarketPage() {
 
   const resolvedEventId = useManualInput ? manualEventId : selectedTournament?.startgg_event_id
 
+  const refTrimmed = outcomeRef.trim()
+  const perMatchRefInvalid = marketType === 0 && refTrimmed.length > 0 && !/(?:vs|—)/i.test(refTrimmed) && refTrimmed.length <= 8
+  const isFormInvalid =
+    !resolvedEventId ||
+    !refTrimmed ||
+    refTrimmed.length < 3 ||
+    perMatchRefInvalid ||
+    Number(seedLiquidity) < 10
+
   function toggleManualInput() {
     setUseManualInput((prev) => !prev)
     setSelectedTournament(null)
@@ -62,8 +71,8 @@ export default function CreateMarketPage() {
       return
     }
 
-    if (marketType === 0 && !/(?:vs|—)/i.test(ref) && ref.length <= 5) {
-      setError('La referencia del partido debe incluir "vs" o "—" entre los nombres, o ser más descriptiva (más de 5 caracteres).')
+    if (marketType === 0 && !/(?:vs|—)/i.test(ref) && ref.length <= 8) {
+      setError('Incluí los dos jugadores (Ej: Mango vs Zain).')
       return
     }
 
@@ -266,7 +275,7 @@ export default function CreateMarketPage() {
 
         <button
           type="submit"
-          disabled={isPending || (!useManualInput && !selectedTournament) || Number(seedLiquidity) < 10}
+          disabled={isPending || isFormInvalid}
           className="rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
         >
           {isPending ? 'Confirmando…' : 'Crear mercado'}

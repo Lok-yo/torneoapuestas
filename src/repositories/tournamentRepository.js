@@ -186,7 +186,7 @@ export async function searchTournaments(query) {
   assertConfigured()
   if (!query || query.trim().length < 2) return []
 
-  const escaped = query.replace(/[,%.()]/g, (c) => `\\${c}`)
+  const escaped = query.replace(/[,%.()_\\]/g, (c) => `\\${c}`)
   const { data, error } = await supabase
     .from('tournaments')
     .select(TOURNAMENT_FIELDS)

@@ -33,6 +33,9 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
     ? Math.floor(new Date(s.event_starts_at).getTime() / 1000)
     : Math.floor(Date.now() / 1000) + 3600
 
+  const perMatchRefInvalid = marketType === 0 && !/(?:vs|—)/i.test(outcomeRef) && outcomeRef.length <= 8
+  const isFormInvalid = Number(seedLiquidity) < 10 || perMatchRefInvalid
+
   if (!MARKET_FACTORY_ADDRESS) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
@@ -169,7 +172,7 @@ export default function CreateMarketModal({ set: s, startggEventId, onClose }) {
 
           <button
             type="submit"
-            disabled={isPending || Number(seedLiquidity) < 10}
+            disabled={isPending || isFormInvalid}
             className="rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
           >
             {isPending ? 'Confirmando…' : 'Crear mercado'}

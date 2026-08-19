@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Search, Loader2, X } from 'lucide-react'
+import { Search, SearchX, Loader2, X } from 'lucide-react'
 import { searchTournaments } from '../repositories/tournamentRepository.js'
 
 export default function TournamentSearchCombobox({ onSelect, disabled }) {
@@ -7,6 +7,7 @@ export default function TournamentSearchCombobox({ onSelect, disabled }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
+  const [emptyQuery, setEmptyQuery] = useState('')
   const wrapperRef = useRef(null)
   const debounceRef = useRef(null)
 
@@ -18,12 +19,18 @@ export default function TournamentSearchCombobox({ onSelect, disabled }) {
     }
 
     setLoading(true)
+    setEmptyQuery('')
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       try {
         const data = await searchTournaments(query)
         setResults(data)
-        setOpen(data.length > 0)
+        if (data.length > 0) {
+          setOpen(true)
+        } else {
+          setOpen(false)
+          setEmptyQuery(query)
+        }
       } catch {
         setResults([])
       } finally {
@@ -52,6 +59,7 @@ export default function TournamentSearchCombobox({ onSelect, disabled }) {
     setQuery('')
     setResults([])
     setOpen(false)
+    setEmptyQuery('')
     onSelect(null)
   }
 
@@ -114,6 +122,15 @@ export default function TournamentSearchCombobox({ onSelect, disabled }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {!loading && emptyQuery && results.length === 0 && (
+        <div className="absolute z-20 mt-1 flex w-full flex-col items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-6 shadow-xl">
+          <SearchX size={20} className="text-zinc-500" />
+          <p className="text-center text-xs text-zinc-400">
+            No se encontraron torneos — probá otro nombre o usá ID manual
+          </p>
+        </div>
       )}
     </div>
   )
