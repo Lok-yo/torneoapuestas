@@ -6,8 +6,10 @@
 // inside the audited FPMM (Decision 1). No wallet required to view; a
 // connected wallet is required only to trade (wallet-identity spec
 // "No Required GG2 Account for Trading").
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { keccak256, encodeAbiParameters } from 'viem'
+import { supabase } from '../../lib/supabase.js'
 import { ArrowLeft, TrendingUp, AlertCircle } from 'lucide-react'
 import { useMarket, useTrade, useWalletConnect } from '../../lib/web3/hooks.js'
 import { MARKET_STATE } from '../../lib/web3/contracts.js'
@@ -23,6 +25,37 @@ export default function OnchainMarketDetailView() {
   const [outcomeIndex, setOutcomeIndex] = useState(0)
   const [investAmount, setInvestAmount] = useState('10')
   const [tradeError, setTradeError] = useState(null)
+  const [names, setNames] = useState(['Outcome A', 'Outcome B'])
+
+  useEffect(() => {
+    if (!market?.startggEventId) return
+    let active = true
+
+    const findNames = async () => {
+      const { data } = await supabase
+        .from('public_tournament_sets_view')
+        .select('startgg_set_id, entrant_a_name, entrant_b_name')
+        .eq('startgg_event_id', market.startggEventId.toString())
+
+      if (!data || !active) return
+
+      for (const s of data) {
+        const hash = keccak256(
+          encodeAbiParameters(
+            [{ type: 'uint256' }, { type: 'uint8' }, { type: 'uint256' }],
+            [BigInt(market.startggEventId), 0, BigInt(s.startgg_set_id)]
+          )
+        )
+        if (hash === questionId) {
+          setNames([s.entrant_a_name || 'Jugador 1', s.entrant_b_name || 'Jugador 2'])
+          break
+        }
+      }
+    }
+    findNames()
+    return () => { active = false }
+  }, [market?.startggEventId, questionId])
+
 
   if (isLoading) {
     return <p className="py-12 text-center text-sm text-zinc-500">Cargando mercado on-chain…</p>

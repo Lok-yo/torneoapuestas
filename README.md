@@ -78,20 +78,32 @@ Para probar los mercados de predicción localmente sin lidiar con faucets de red
    cd contracts
    forge script script/DeployLocal.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
    ```
-3. **Configura el Frontend:**
+3. **Autoriza el Torneo en el MarketFactory (Requerido para Anvil):**
+   Para poder crear mercados de un torneo con ID de start.gg (por ejemplo, `1692032`), debes registrarlo como administrador:
+   ```bash
+   cast send 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9 "registerStartggEvent(uint256)" 1692032 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --rpc-url http://127.0.0.1:8545
+   ```
+4. **Adelantar Tiempo para Activar Mercados (Time Travel):**
+   Los mercados recién creados entran en estado `PENDING` por una ventana de 60 minutos (`MAX_CREATION_WINDOW`). Para activarlo inmediatamente en pruebas locales:
+   ```bash
+   cast rpc evm_increaseTime 3660 --rpc-url http://127.0.0.1:8545
+   cast rpc evm_mine --rpc-url http://127.0.0.1:8545
+   cast send 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9 "activateIfUnchallenged(bytes32)" <QUESTION_ID> --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --rpc-url http://127.0.0.1:8545
+   ```
+5. **Configura el Frontend:**
    Actualiza tu archivo `.env.local` con las direcciones desplegadas y ajusta el RPC a tu nodo local:
    ```env
    VITE_AMOY_RPC_URL=http://127.0.0.1:8545
-   VITE_CTF_ADDRESS=<dirección-del-ctf>
-   VITE_USDC_ADDRESS=<dirección-de-usdc>
-   VITE_FPMM_FACTORY_ADDRESS=<dirección-del-fpmm-factory>
-   VITE_MARKET_FACTORY_ADDRESS=<dirección-del-market-factory>
-   VITE_RESOLUTION_ADAPTER_ADDRESS=<dirección-del-resolution-adapter>
+   VITE_CTF_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+   VITE_USDC_ADDRESS=0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+   VITE_FPMM_FACTORY_ADDRESS=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
+   VITE_MARKET_FACTORY_ADDRESS=0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9
+   VITE_RESOLUTION_ADAPTER_ADDRESS=0x5FC8d32690cc91D4c39d9d3abcBD16989F875707
    ```
-4. **Conecta MetaMask:**
-   Añade o edita la red Polygon Amoy en MetaMask para que apunte a `http://127.0.0.1:8545`.
+6. **Conecta MetaMask:**
+   Añade o edita la red Polygon Amoy en MetaMask para que apunte a `http://127.0.0.1:8545` (Chain ID: 80002).
 
-*Nota: El costo mínimo para crear un mercado está configurado en **2 USDC** (1 USDC de Bono de Creación + 1 USDC de Liquidez Inicial).*
+*Nota: El costo mínimo para crear un mercado está configurado en **101 USDC** (1 USDC de Bono de Creación + 100 USDC de Liquidez Inicial).*
 
 ---
 

@@ -10,7 +10,7 @@ import { checkDuplicateMarketByQuestionId } from '../repositories/tournamentRepo
 import MarketPreview from './MarketPreview.jsx'
 
 const CREATION_BOND_USDC = 1n * 1_000_000n
-const MIN_LIQUIDITY_USDC = 1n * 1_000_000n
+const MIN_LIQUIDITY_USDC = 100n * 1_000_000n
 
 export default function CreateMarketModal({ set: s, startggEventId: propEventId, onClose }) {
   const startggEventId = propEventId ?? s.startgg_event_id;
@@ -18,7 +18,7 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
   const { isConnected, connectors, connect, connectError } = useWalletConnect()
   const { createMarket, isPending } = useCreateMarket()
 
-  const [seedLiquidity, setSeedLiquidity] = useState('1')
+  const [seedLiquidity, setSeedLiquidity] = useState('100')
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -118,7 +118,7 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
             <label htmlFor="modal-seed-liquidity" className="mb-1 block text-xs font-medium text-zinc-400">
-              Liquidez inicial (USDC, mínimo 1)
+              Liquidez inicial (USDC, mínimo 100)
             </label>
             <input
               id="modal-seed-liquidity"

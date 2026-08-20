@@ -21,6 +21,7 @@ export const wagmiConfig = createConfig({
   transports: {
     [polygonAmoy.id]: http(import.meta.env.VITE_AMOY_RPC_URL || undefined),
   },
+  batch: { multicall: false },
 })
 
 export const AMOY_CHAIN_ID = polygonAmoy.id

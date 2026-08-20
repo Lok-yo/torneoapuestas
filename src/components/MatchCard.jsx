@@ -1,5 +1,9 @@
 import { Link } from 'react-router-dom'
 import { Trophy, TrendingUp } from 'lucide-react'
+import { keccak256, encodeAbiParameters } from 'viem'
+import { useMarket } from '../lib/web3/hooks.js'
+import { useMemo } from 'react'
+
 
 const STATE_LABEL = {
   PENDING: 'Pendiente',
@@ -15,7 +19,21 @@ const STATE_STYLE = {
   CANCELLED: 'bg-rose-950/30 text-rose-400',
 }
 
-export default function MatchCard({ set: s, onSelect, disabled, hasMarket }) {
+export default function MatchCard({ set: s, onSelect, disabled, hasMarket: dbHasMarket }) {
+  const questionId = useMemo(() => {
+    if (!s.startgg_event_id || !s.startgg_set_id) return null
+    return keccak256(
+      encodeAbiParameters(
+        [{ type: 'uint256' }, { type: 'uint8' }, { type: 'uint256' }],
+        [BigInt(s.startgg_event_id), 0, BigInt(s.startgg_set_id)]
+      )
+    )
+  }, [s.startgg_event_id, s.startgg_set_id])
+
+  const { market } = useMarket(questionId)
+  const isMarketOnchain = market && market.state !== 0
+  const hasMarket = dbHasMarket || isMarketOnchain
+
   const nameA = s.entrant_a_name ?? 'Por definir'
   const nameB = s.entrant_b_name ?? 'Por definir'
   const isCompleted = s.state === 'COMPLETED'
@@ -51,7 +69,7 @@ export default function MatchCard({ set: s, onSelect, disabled, hasMarket }) {
         )}
         {isPending && hasMarket && (
           <Link
-            to={`/mercados/${s.startgg_set_id}`}
+            to={`/mercados/${questionId}`}
             className="flex items-center justify-center gap-1 border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-center font-mono text-[10px] uppercase text-violet-400 hover:bg-violet-500/20 hover:text-violet-300"
           >
             <TrendingUp size={10} />

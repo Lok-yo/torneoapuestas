@@ -13,13 +13,13 @@ import { useWalletConnect, useCreateMarket } from '../lib/web3/hooks.js'
 import { parseUsdc, formatUsdc } from '../lib/web3/format.js'
 import { MARKET_FACTORY_ADDRESS } from '../lib/web3/contracts.js'
 import { translateError } from '../lib/web3/translateError.js'
-import { checkDuplicateMarket, checkDuplicateMarketBySetId, listTournamentSets } from '../repositories/tournamentRepository.js'
+import { checkDuplicateMarketByQuestionId, listTournamentSets } from '../repositories/tournamentRepository.js'
 import TournamentSearchCombobox from '../components/TournamentSearchCombobox.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
 import MarketPreview from '../components/MarketPreview.jsx'
 
 const CREATION_BOND_USDC = 1n * 1_000_000n
-const MIN_LIQUIDITY_USDC = 1n * 1_000_000n
+const MIN_LIQUIDITY_USDC = 100n * 1_000_000n
 
 const ROUND_LABEL = {
   1: 'Grand Finals',
@@ -38,7 +38,7 @@ export default function CreateMarketPage() {
 
   const [selectedTournament, setSelectedTournament] = useState(null)
   const [marketType, setMarketType] = useState(0)
-  const [seedLiquidity, setSeedLiquidity] = useState('10')
+  const [seedLiquidity, setSeedLiquidity] = useState('100')
   const [error, setError] = useState(null)
 
   // Loaded from the selected tournament
@@ -122,7 +122,7 @@ export default function CreateMarketPage() {
   const isFormInvalid =
     !resolvedEventId ||
     !outcomeRef ||
-    Number(seedLiquidity) < 1 ||
+    Number(seedLiquidity) < 100 ||
     (marketType === 0 && !selectedSet) ||
     (marketType === 1 && !selectedEntrant)
 
@@ -139,27 +139,19 @@ export default function CreateMarketPage() {
     }
 
     try {
-      // Duplicate check
-      if (marketType === 0 && selectedSet) {
-        const isDup = await checkDuplicateMarketBySetId(selectedSet.startgg_set_id)
-        if (isDup) {
-          setError('Ya existe un mercado activo para este set.')
-          return
-        }
-      } else {
-        const isDup = await checkDuplicateMarket(BigInt(resolvedEventId))
-        if (isDup) {
-          setError('Ya existe un mercado activo para este evento.')
-          return
-        }
-      }
-
       const questionId = keccak256(
         encodeAbiParameters(
           [{ type: 'uint256' }, { type: 'uint8' }, { type: 'bytes32' }],
           [BigInt(resolvedEventId), marketType, keccak256(new TextEncoder().encode(outcomeRef))],
         ),
       )
+
+      // Duplicate check
+      const isDup = await checkDuplicateMarketByQuestionId(questionId)
+      if (isDup) {
+        setError('Ya existe un mercado activo para esta selección.')
+        return
+      }
 
       const eventStartsAt =
         marketType === 0 && selectedSet?.event_starts_at
@@ -344,12 +336,12 @@ export default function CreateMarketPage() {
         {(selectedSet || selectedEntrant) && (
           <div>
             <label htmlFor="seed-liquidity" className="mb-1 block text-xs font-medium text-zinc-400">
-              Liquidez inicial (USDC, mínimo 1)
+              Liquidez inicial (USDC, mínimo 100)
             </label>
             <input
               id="seed-liquidity"
               type="number"
-              min="1"
+              min="100"
               step="0.01"
               value={seedLiquidity}
               onChange={(e) => {
@@ -361,14 +353,14 @@ export default function CreateMarketPage() {
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') {
                   const n = Number(seedLiquidity)
-                  if (!isNaN(n) && n <= 1) e.preventDefault()
+                  if (!isNaN(n) && n <= 100) e.preventDefault()
                 }
               }}
               disabled={isPending}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
             />
-            {Number(seedLiquidity) < 1 && seedLiquidity !== "" && (
-              <p className="mt-1 text-xs text-rose-400">Mínimo 1 USDC</p>
+            {Number(seedLiquidity) < 100 && seedLiquidity !== "" && (
+              <p className="mt-1 text-xs text-rose-400">Mínimo 100 USDC</p>
             )}
           </div>
         )}
