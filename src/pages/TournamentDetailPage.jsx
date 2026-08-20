@@ -12,7 +12,6 @@ import { useParams, Link, Navigate } from 'react-router-dom'
 import { ArrowLeft, Users, Swords } from 'lucide-react'
 import { getTournament, getTournamentFormat, listTournamentSets } from '../repositories/tournamentRepository.js'
 import { getGameById } from '../data/games.js'
-import { useSession } from '../auth/SessionProvider.jsx'
 import GameTag from '../components/GameTag.jsx'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
 import TournamentPredictionWidget from '../components/TournamentPredictionWidget.jsx'
@@ -31,12 +30,9 @@ const TIMELINE = [
 
 export default function TournamentDetailPage() {
   const { id } = useParams()
-  const { status: sessionStatus, session } = useSession()
   const [state, setState] = useState({ status: 'loading', tournament: null, format: null, sets: [], error: null })
   const [tab, setTab] = useState('descripcion')
   const [selectedSet, setSelectedSet] = useState(null)
-
-  const userId = sessionStatus === 'authenticated' ? session?.user?.id : null
 
   const load = useCallback(async () => {
     try {
@@ -60,8 +56,6 @@ export default function TournamentDetailPage() {
   }, [load])
 
   if (state.status === 'not_found') return <Navigate to="/torneos" replace />
-
-  const isOrganizer = state.tournament && userId === state.tournament.organizer_id
 
   return (
     <div className="flex flex-col gap-4">
@@ -129,7 +123,11 @@ export default function TournamentDetailPage() {
           )}
           {tab === 'predicciones' && (
             <div id="panel-predicciones" role="tabpanel" aria-labelledby="tab-predicciones">
-              <TournamentPredictionWidget tournamentId={state.tournament.id} isOrganizer={isOrganizer} />
+              <TournamentPredictionWidget
+                tournamentId={state.tournament.id}
+                sets={state.sets}
+                startggEventId={state.tournament.startgg_event_id}
+              />
             </div>
           )}
         </>

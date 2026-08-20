@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
 import { GAMES } from '../data/games.js'
-import { useSession } from '../auth/SessionProvider.jsx'
 import { listMarkets } from '../repositories/marketRepository.js'
 import { FEATURE_FLAGS } from '../config/featureFlags.js'
 import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
@@ -11,8 +10,6 @@ import { useTournaments } from '../hooks/useTournaments.js'
 const ACTIVE = new Set(['REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'IN_PROGRESS'])
 
 export default function HomePage() {
-  const { status, profile } = useSession()
-  const isAuthenticated = status === 'authenticated' && Boolean(profile?.username)
   const { status: boardStatus, data: allTournaments } = useTournaments()
   const { data: markets } = useAsync(() => listMarkets().catch(() => []), [])
   const tournaments = allTournaments ?? []
@@ -23,11 +20,11 @@ export default function HomePage() {
   const hotLines = (markets ?? [])
     .filter((m) => m.status === 'OPEN')
     .slice(0, 4)
-    .map((m) => {
-      const yes = (m.market_outcomes || []).find((o) => /sí|si|yes/i.test(o.label)) || (m.market_outcomes || [])[0]
-      const no = (m.market_outcomes || []).find((o) => /^no$/i.test(o.label)) || (m.market_outcomes || [])[1]
-      return { id: m.id, question: m.question, yes, no }
-    })
+    .map((m) => ({
+      id: m.id,
+      question: m.question,
+      outcomes: (m.market_outcomes || []).slice(0, 2),
+    }))
 
   return (
     <div className="flex flex-col gap-8">
@@ -66,16 +63,6 @@ export default function HomePage() {
                 Evento en juego
               </Link>
             )}
-            {!isAuthenticated && (
-              <Link to="/login" className="btn-ghost px-6 py-3">
-                Continuar con Google
-              </Link>
-            )}
-            {FEATURE_FLAGS.web3 && (
-              <Link to="/mercados/nuevo" className="btn-ghost px-6 py-3">
-                Crear Mercado
-              </Link>
-            )}
           </div>
         </div>
       </section>
@@ -91,12 +78,11 @@ export default function HomePage() {
               <li key={line.id} className="border-b border-zinc-800/40 last:border-0">
                 <Link to={`/mercados/${line.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-zinc-800/30">
                   <p className="min-w-0 flex-1 truncate text-[14px] font-medium text-white">{line.question}</p>
-                  {line.yes && (
-                    <span className="odds-btn">SÍ {Math.round(Number(line.yes.price) * 100)}</span>
-                  )}
-                  {line.no && (
-                    <span className="odds-btn odds-no">NO {Math.round(Number(line.no.price) * 100)}</span>
-                  )}
+                  {line.outcomes.map((o, i) => (
+                    <span key={o.id} className={`odds-btn ${i === 1 ? 'odds-no' : ''}`}>
+                      {o.label} {Math.round(Number(o.price) * 100)}
+                    </span>
+                  ))}
                 </Link>
               </li>
             ))}

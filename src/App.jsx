@@ -12,8 +12,10 @@ import AdminPanelPage from './pages/AdminPanelPage.jsx'
 import LeaderboardPage from './pages/LeaderboardPage.jsx'
 import PlayerProfilePage from './pages/PlayerProfilePage.jsx'
 import WalletPage from './pages/WalletPage.jsx'
+import BetsHistoryPage from './pages/BetsHistoryPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
 import { useSession } from './auth/SessionProvider.jsx'
+import WalletSessionBinder from './auth/WalletSessionBinder.jsx'
 import { FEATURE_FLAGS } from './config/featureFlags.js'
 
 const MarketDetailPage = lazy(() => import('./pages/MarketDetailPage.jsx'))
@@ -42,6 +44,7 @@ function OnboardingRedirect() {
 export default function App() {
   return (
     <>
+      <WalletSessionBinder />
       <OnboardingRedirect />
       <Suspense fallback={<div className="py-12 text-center text-zinc-500">Cargando…</div>}>
         <Routes>
@@ -53,20 +56,11 @@ export default function App() {
           <Route path="torneos/:id" element={<TournamentDetailPage />} />
           <Route path="ranking" element={<LeaderboardPage />} />
           <Route path="jugadores/:username" element={<PlayerProfilePage />} />
-          {/* Prediction-market detail route — gated behind FEATURE_FLAGS.web3.
-              When off (default), resolves to NotFoundPage mirroring the
-              /mercados/nuevo gate pattern. The route element internally
-              delegates to OnchainMarketDetailView when web3 is on. See
-              design.md Decision 7 and tasks.md 11.5. */}
-          <Route path="mercados/:id" element={FEATURE_FLAGS.web3 ? <MarketDetailPage /> : <NotFoundPage />} />
-          {/* Permissionless on-chain market creation (proposal.md "market
-              creation: permissionless") — gated behind FEATURE_FLAGS.web3.
-              Registered but resolves to NotFoundPage while off (default). */}
+          <Route path="mercados/:id" element={<MarketDetailPage />} />
           <Route path="mercados/nuevo" element={FEATURE_FLAGS.web3 ? <CreateMarketPage /> : <NotFoundPage />} />
-          {/* Wallet route — gated behind FEATURE_FLAGS.web3.
-              When off, resolves to NotFoundPage (no legacy TCRED UI). */}
           <Route element={<RequireAuth />}>
-            <Route path="wallet" element={FEATURE_FLAGS.web3 ? <WalletPage /> : <NotFoundPage />} />
+            <Route path="wallet" element={<WalletPage />} />
+            <Route path="apuestas" element={<BetsHistoryPage />} />
           </Route>
           {/* First real production usage of RequireAuth's role prop (built
               in Phase 2, unused by any route until now) — see tasks.md

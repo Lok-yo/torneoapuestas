@@ -40,4 +40,23 @@ describe('toAppError', () => {
     expect(toAppError(null).code).toBe('UNAVAILABLE')
     expect(toAppError(undefined).code).toBe('UNAVAILABLE')
   })
+
+  it('maps a Postgrest INSUFFICIENT_FUNDS exception to UNPROCESSABLE with the Spanish message', () => {
+    const result = toAppError({
+      message: 'INSUFFICIENT_FUNDS: Saldo insuficiente para realizar la compra',
+      code: '22003',
+      details: null,
+      hint: null,
+    })
+    expect(result.code).toBe('UNPROCESSABLE')
+    expect(result.message).toBe('Saldo insuficiente para realizar la compra')
+  })
+
+  it('maps a wrapped UNAUTHENTICATED prefix onto the structured error body', () => {
+    const result = toAppError({
+      error: { code: 'P0001', message: 'UNAUTHENTICATED: Ingresá con tu cuenta para apostar' },
+    })
+    expect(result.code).toBe('UNAUTHENTICATED')
+    expect(result.message).toBe('Ingresá con tu cuenta para apostar')
+  })
 })

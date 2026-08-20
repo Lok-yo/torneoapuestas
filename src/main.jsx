@@ -6,7 +6,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import App from './App.jsx'
 import { SessionProvider } from './auth/SessionProvider.jsx'
+import { I18nProvider } from './i18n/I18nProvider.jsx'
 import { wagmiConfig } from './lib/web3/client.js'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 
 // WagmiProvider/QueryClientProvider are mounted unconditionally — a React
 // context provider has no network side effect on its own, and every real
@@ -17,14 +19,18 @@ const queryClient = new QueryClient()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <SessionProvider>
-            <App />
-          </SessionProvider>
-        </BrowserRouter>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <ErrorBoundary>
+      <WagmiProvider config={wagmiConfig}>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <SessionProvider>
+              <I18nProvider>
+                <App />
+              </I18nProvider>
+            </SessionProvider>
+          </BrowserRouter>
+        </QueryClientProvider>
+      </WagmiProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )

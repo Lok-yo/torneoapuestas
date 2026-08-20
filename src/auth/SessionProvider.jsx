@@ -6,7 +6,7 @@
 // 'expired' is the "recoverable authentication state" the spec requires
 // when the provider/session/bootstrap is unavailable — protected
 // commands are denied in this state exactly like 'anonymous'.
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   bootstrapSession,
   getCurrentSession,
@@ -33,17 +33,29 @@ const INITIAL_STATE = {
   walletLink: null,
 }
 
+const ANONYMOUS_STATE = {
+  status: 'anonymous',
+  session: null,
+  profile: null,
+  roles: [],
+  error: null,
+  walletLink: null,
+}
+
 export function SessionProvider({ children }) {
   const [state, setState] = useState(INITIAL_STATE)
+  const bootstrapGen = useRef(0)
 
   const bootstrap = useCallback(async (session) => {
+    const gen = bootstrapGen.current
     if (!session) {
-      setState({ status: 'anonymous', session: null, profile: null, roles: [], error: null })
+      if (gen === bootstrapGen.current) setState(ANONYMOUS_STATE)
       return
     }
 
     try {
       const { profile, roles } = await bootstrapSession()
+      if (gen !== bootstrapGen.current) return
       setState({ status: 'authenticated', session, profile, roles: roles ?? [], error: null, walletLink: null })
       // Non-blocking: an optional social link never gates authentication
       // or any trading action (wallet-identity spec "No Required GG2
@@ -53,8 +65,9 @@ export function SessionProvider({ children }) {
         .then((walletLink) => setState((prev) => (prev.status === 'authenticated' ? { ...prev, walletLink } : prev)))
         .catch(() => {})
     } catch (rawError) {
+      if (gen !== bootstrapGen.current) return
       const error = toAppError(rawError)
-      setState({ status: 'expired', session, profile: null, roles: [], error })
+      setState({ status: 'expired', session, profile: null, roles: [], error, walletLink: null })
     }
   }, [])
 
@@ -68,18 +81,42 @@ export function SessionProvider({ children }) {
       .catch((rawError) => {
         if (!cancelled) {
           const error = toAppError(rawError)
-          setState({ status: 'expired', session: null, profile: null, roles: [], error })
+          // Missing/disabled identity is not an expired session — render
+          // the public SPA instead of a recoverable-auth dead end.
+          const status = error.code === 'UNAVAILABLE' ? 'anonymous' : 'expired'
+          setState({ status, session: null, profile: null, roles: [], error })
         }
       })
 
-    const unsubscribe = onAuthStateChange((event, session) => {
-      if (cancelled) return
-      if (event === 'SIGNED_OUT') {
-        setState({ status: 'anonymous', session: null, profile: null, roles: [], error: null })
-        return
+    // Guard the subscription: a throw here unmounts SessionProvider (and
+    // the whole app) in React 19. sessionRepository also returns a no-op
+    // when unconfigured; this catch is the last line of defense.
+    let unsubscribe = () => {}
+    try {
+      unsubscribe = onAuthStateChange((event, session) => {
+        if (cancelled) return
+        if (event === 'SIGNED_OUT' || !session) {
+          bootstrapGen.current += 1
+          setState(ANONYMOUS_STATE)
+          return
+        }
+        // Keep the existing profile; a refresh must not resurrect a
+        // session after the user hit sign-out.
+        if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          setState((prev) => (prev.status === 'authenticated' ? { ...prev, session } : prev))
+          return
+        }
+        if (event === 'INITIAL_SESSION') {
+          return
+        }
+        bootstrap(session)
+      })
+    } catch (rawError) {
+      if (!cancelled) {
+        const error = toAppError(rawError)
+        setState({ status: 'anonymous', session: null, profile: null, roles: [], error })
       }
-      bootstrap(session)
-    })
+    }
 
     return () => {
       cancelled = true
@@ -89,8 +126,13 @@ export function SessionProvider({ children }) {
   }, [])
 
   const signOut = useCallback(async () => {
-    await signOutRepo()
-    setState({ status: 'anonymous', session: null, profile: null, roles: [], error: null })
+    bootstrapGen.current += 1
+    setState(ANONYMOUS_STATE)
+    try {
+      await signOutRepo()
+    } catch {
+      // Local UI is already anonymous; storage wipe is best-effort.
+    }
   }, [])
 
   const refresh = useCallback(() => bootstrap(state.session), [bootstrap, state.session])

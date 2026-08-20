@@ -38,3 +38,9 @@ coverage
 playwright-report
 test-results
 .playwright
+
+# Foundry
+contracts/lib
+contracts/out
+contracts/cache
+contracts/broadcast

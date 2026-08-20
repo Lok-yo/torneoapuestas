@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { getWallet, withdrawFunds, getTransactionHistory } from '../walletRepository.js'
+import { getWallet, withdrawFunds, depositFunds, getTransactionHistory } from '../walletRepository.js'
 import { supabase } from '../../lib/supabase.js'
 
 vi.mock('../../lib/supabase.js', () => ({
@@ -30,6 +30,21 @@ describe('walletRepository', () => {
       available_balance: 100,
       currency: 'USD',
     })
+  })
+
+  it('depositFunds credits balance via deposit_funds RPC', async () => {
+    supabase.rpc.mockResolvedValueOnce({
+      data: [{ balance: '150.00', locked_balance: '0.00', available_balance: '150.00' }],
+      error: null,
+    })
+
+    const wallet = await depositFunds(50, 'ref-1')
+
+    expect(supabase.rpc).toHaveBeenCalledWith('deposit_funds', {
+      p_amount: 50,
+      p_payment_ref: 'ref-1',
+    })
+    expect(wallet.available_balance).toBe(150)
   })
 
   it('withdrawFunds debits balance via withdraw_funds RPC', async () => {

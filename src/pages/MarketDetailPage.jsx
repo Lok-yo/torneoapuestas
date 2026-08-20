@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useLocation } from 'react-router-dom'
 import { ArrowLeft, TrendingUp, CheckCircle, AlertCircle, DollarSign, Award } from 'lucide-react'
 import { useSession } from '../auth/SessionProvider.jsx'
 import { getMarketDetails, buyMarketShares, resolveMarket } from '../repositories/marketRepository.js'
@@ -10,14 +10,15 @@ import OnchainMarketDetailView from './onchain/OnchainMarketDetailView.jsx'
 
 const MarketPriceChart = lazy(() => import('../components/MarketPriceChart.jsx'))
 
+function isOnchainQuestionId(id) {
+  return /^0x[0-9a-fA-F]{64}$/.test(id ?? '')
+}
+
 export default function MarketDetailPage() {
-  // Repointed on-chain when FEATURE_FLAGS.web3 is on (default off). The
-  // route param becomes a bytes32 questionId instead of a Postgres UUID
-  // — see OnchainMarketDetailView.jsx and design.md Decision 3/7.
-  if (FEATURE_FLAGS.web3) {
+  const { id } = useParams()
+  if (FEATURE_FLAGS.web3 && isOnchainQuestionId(id)) {
     return <OnchainMarketDetailView />
   }
-
   return <LegacyMarketDetailPage />
 }
 
@@ -72,6 +73,7 @@ function SimulatedOrderBook({ outcomes }) {
 
 function LegacyMarketDetailPage() {
   const { id } = useParams()
+  const location = useLocation()
   const { profile, hasRole } = useSession()
   const isOrganizerOrAdmin = hasRole('organizer') || hasRole('admin')
 
@@ -333,9 +335,10 @@ function LegacyMarketDetailPage() {
                 <p className="text-sm font-medium text-zinc-300">Inicia sesión para operar en este mercado.</p>
                 <Link
                   to="/login"
+                  state={{ from: location }}
                   className="mt-3 inline-block rounded-xl bg-zinc-100 px-4 py-2 text-xs font-bold text-zinc-900 hover:bg-white transition"
                 >
-                  Ingresar
+                  Crear cuenta / Ingresar
                 </Link>
               </div>
             ) : (

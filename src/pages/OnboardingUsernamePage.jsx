@@ -53,7 +53,7 @@ export default function OnboardingUsernamePage() {
     <div className="mx-auto mt-12 flex max-w-sm flex-col gap-6 border border-[#242424] bg-[#0c0c0c] p-8">
       <div>
         <p className="kicker">Cuenta</p>
-        <h1 className="mt-1 font-display text-4xl font-bold text-white">Elegí tu usuario</h1>
+        <h1 className="mt-1 font-display text-4xl font-bold text-white">Elige tu usuario</h1>
         <p className="mt-1 text-sm text-[#8a8680]">Así te van a ver otros jugadores en torneos y en el ranking.</p>
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">

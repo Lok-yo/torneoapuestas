@@ -18,7 +18,7 @@ contract DeployTestnet is Script {
 
         // Deploy dependencies
         MockConditionalTokens ctf = new MockConditionalTokens();
-        MockERC20 usdc = new MockERC20("Test USDC", "USDC", 6);
+        MockERC20 usdc = new MockERC20();
         MockFPMMFactory fpmmFactory = new MockFPMMFactory();
         MockSanctionsList oracle = new MockSanctionsList();
 

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Wallet, LogOut, Sparkles, PlusCircle, Menu, Search } from 'lucide-react'
 import { useSession } from '../auth/SessionProvider.jsx'
+import { useI18n } from '../i18n/I18nProvider.jsx'
+import { useDisconnect } from 'wagmi'
 import { claimOrganizerRole } from '../repositories/tournamentRepository.js'
 import { FEATURE_FLAGS } from '../config/featureFlags.js'
 import Avatar from './Avatar.jsx'
@@ -9,8 +11,10 @@ import Avatar from './Avatar.jsx'
 export default function Navbar({ onToggleNav }) {
   const { status, profile, hasRole, signOut, refresh } = useSession()
   const navigate = useNavigate()
+  const { disconnect } = useDisconnect()
   const [claiming, setClaiming] = useState(false)
   const [q, setQ] = useState('')
+  const { t, lang, setLang } = useI18n()
 
   const isAuthenticated = status === 'authenticated' && Boolean(profile?.username)
   const isOrganizerOrAdmin = hasRole('organizer') || hasRole('admin')
@@ -44,7 +48,7 @@ export default function Navbar({ onToggleNav }) {
         <button
           type="button"
           className="flex h-8 w-8 items-center justify-center border border-[#2a2a2a] text-[#8a8680] md:hidden"
-          aria-label="Abrir menú"
+          aria-label={t('nav.openMenu')}
           onClick={onToggleNav}
         >
           <Menu size={16} />
@@ -68,8 +72,8 @@ export default function Navbar({ onToggleNav }) {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar evento, juego, jugador…"
-            aria-label="Buscar evento, juego, jugador"
+            placeholder={t('nav.search')}
+            aria-label={t('nav.search')}
             className="h-8 w-full bg-transparent text-[13px] text-[#efece6] outline-none placeholder:text-[#5a5650]"
           />
         </label>
@@ -82,7 +86,16 @@ export default function Navbar({ onToggleNav }) {
             className="hidden items-center gap-1 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#8a8680] hover:text-[#c6a46a] sm:inline-flex"
           >
             <PlusCircle size={12} />
-            Crear Mercado
+            {t('nav.createMarket')}
+          </Link>
+        )}
+
+        {isAuthenticated && (
+          <Link
+            to="/apuestas"
+            className="hidden px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#8a8680] hover:text-[#eef1f4] sm:inline-flex"
+          >
+            {t('nav.bets')}
           </Link>
         )}
 
@@ -96,30 +109,36 @@ export default function Navbar({ onToggleNav }) {
             title="Obtener rol de organizador para administrar torneos"
           >
             <Sparkles size={12} />
-            {claiming ? 'Activando…' : 'Ser Organizador'}
+            {claiming ? t('nav.activating') : t('nav.becomeOrganizer')}
           </button>
         )}
 
         {isAuthenticated ? (
           <>
-            {FEATURE_FLAGS.web3 && (
-              <Link
-                to="/wallet"
-                className="inline-flex items-center gap-1.5 border border-[#2a3140] px-3 py-1.5 text-[12px] font-semibold text-[#eef1f4] hover:border-[#b6ff3a]"
-              >
-                <Wallet size={13} />
-                <span>Billetera</span>
-              </Link>
-            )}
+            <Link
+              to="/wallet"
+              className="inline-flex items-center gap-1.5 border border-[#2a3140] px-3 py-1.5 text-[12px] font-semibold text-[#eef1f4] hover:border-[#b6ff3a]"
+            >
+              <Wallet size={13} />
+              <span>{t('nav.wallet')}</span>
+            </Link>
             <Link to={`/jugadores/${profile.username}`} className="flex items-center gap-1.5 px-1">
               <Avatar username={profile.username} size={24} />
               <span className="hidden text-[12px] font-medium text-[#efece6] sm:inline">@{profile.username}</span>
             </Link>
             <button
               type="button"
-              onClick={signOut}
-              title="Cerrar sesión"
-              aria-label="Cerrar sesión"
+              onClick={async () => {
+                await signOut()
+                try {
+                  disconnect()
+                } catch {
+                  // already disconnected
+                }
+                navigate('/', { replace: true })
+              }}
+              title={t('nav.signOut')}
+              aria-label={t('nav.signOut')}
               className="p-1.5 text-[#6f6b64] hover:text-[#efece6]"
             >
               <LogOut size={15} />
@@ -127,9 +146,26 @@ export default function Navbar({ onToggleNav }) {
           </>
         ) : (
           <Link to="/login" className="btn-lime px-4 py-2 text-[12px]">
-            Ingresar
+            {t('nav.signIn')}
           </Link>
         )}
+        <div className="ml-1 flex items-center text-[10px] font-bold uppercase tracking-wider" title={t('nav.language')}>
+          <button
+            type="button"
+            onClick={() => setLang('es')}
+            className={lang === 'es' ? 'text-lime' : 'text-[#6f6b64] hover:text-[#efece6]'}
+          >
+            ES
+          </button>
+          <span className="px-1 text-[#3a3a3a]">|</span>
+          <button
+            type="button"
+            onClick={() => setLang('en')}
+            className={lang === 'en' ? 'text-lime' : 'text-[#6f6b64] hover:text-[#efece6]'}
+          >
+            EN
+          </button>
+        </div>
       </div>
     </header>
   )

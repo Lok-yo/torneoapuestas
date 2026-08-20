@@ -21,8 +21,10 @@ function fetchOnce() {
   return inflight
 }
 
-// Seed the cache on first import (fire-and-forget)
-if (!cache && !inflight) fetchOnce()
+// Seed the cache on first import (fire-and-forget). Swallow the rejection
+// here: an unconfigured backend must not surface as an unhandled
+// pageerror. The hook's useEffect still observes success/error.
+if (!cache && !inflight) fetchOnce().catch(() => {})
 
 /**
  * @returns {{ status: 'loading'|'ready'|'error', data: import('../repositories/tournamentRepository.js').Tournament[]|null, error: import('../lib/errors.js').AppError|null }}

@@ -8,11 +8,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PlusCircle, AlertCircle, AlertTriangle, ExternalLink, Loader2, Trophy, Swords, Users } from 'lucide-react'
-import { keccak256, encodeAbiParameters } from 'viem'
 import { useWalletConnect, useCreateMarket } from '../lib/web3/hooks.js'
 import { parseUsdc, formatUsdc } from '../lib/web3/format.js'
 import { MARKET_FACTORY_ADDRESS } from '../lib/web3/contracts.js'
 import { translateError } from '../lib/web3/translateError.js'
+import { questionIdFromOutcomeRef } from '../lib/web3/questionId.js'
+import { isLocalAnvil, registerStartggEvent, activateLocalMarket } from '../lib/web3/localDev.js'
 import { checkDuplicateMarketByQuestionId, listTournamentSets } from '../repositories/tournamentRepository.js'
 import TournamentSearchCombobox from '../components/TournamentSearchCombobox.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
@@ -33,7 +34,7 @@ const ROUND_LABEL = {
 
 export default function CreateMarketPage() {
   const navigate = useNavigate()
-  const { isConnected, connectors, connect, connectError } = useWalletConnect()
+  const { isConnected, connectors, connect, connectError, isCorrectChain, switchToAmoy } = useWalletConnect()
   const { createMarket, isPending } = useCreateMarket()
 
   const [selectedTournament, setSelectedTournament] = useState(null)
@@ -139,12 +140,7 @@ export default function CreateMarketPage() {
     }
 
     try {
-      const questionId = keccak256(
-        encodeAbiParameters(
-          [{ type: 'uint256' }, { type: 'uint8' }, { type: 'bytes32' }],
-          [BigInt(resolvedEventId), marketType, keccak256(new TextEncoder().encode(outcomeRef))],
-        ),
-      )
+      const questionId = questionIdFromOutcomeRef(resolvedEventId, marketType, outcomeRef)
 
       // Duplicate check
       const isDup = await checkDuplicateMarketByQuestionId(questionId)
@@ -160,6 +156,10 @@ export default function CreateMarketPage() {
 
       const totalApproval = CREATION_BOND_USDC + seed
 
+      if (isLocalAnvil()) {
+        await registerStartggEvent(resolvedEventId)
+      }
+
       await createMarket({
         questionId,
         startggEventId: BigInt(resolvedEventId),
@@ -168,6 +168,14 @@ export default function CreateMarketPage() {
         eventStartsAt,
         totalApproval,
       })
+
+      if (isLocalAnvil()) {
+        try {
+          await activateLocalMarket(questionId)
+        } catch (activateErr) {
+          console.warn('[CreateMarketPage] local activate failed', activateErr)
+        }
+      }
 
       navigate(`/mercados/${questionId}`)
     } catch (err) {
@@ -389,7 +397,7 @@ export default function CreateMarketPage() {
           <div className="mt-2 flex flex-col gap-3">
             {!isConnected ? (
               <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
-                <p className="mb-1 text-center text-xs text-zinc-400">Elegí tu wallet para pagar y crear el mercado</p>
+                <p className="mb-1 text-center text-xs text-zinc-400">Elige tu wallet para pagar y crear el mercado</p>
                 {connectors.map((connector) => (
                   <button
                     key={connector.uid}
@@ -411,6 +419,14 @@ export default function CreateMarketPage() {
                   <ExternalLink size={10} /> ¿Qué es una wallet?
                 </a>
               </div>
+            ) : !isCorrectChain ? (
+              <button
+                type="button"
+                onClick={switchToAmoy}
+                className="w-full border border-amber-500/40 bg-amber-950/20 py-3 text-sm font-semibold text-amber-300"
+              >
+                Cambiar a chain 80002 (Anvil / Amoy)
+              </button>
             ) : (
               <button
                 type="submit"

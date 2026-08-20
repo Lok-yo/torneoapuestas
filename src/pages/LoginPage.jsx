@@ -36,7 +36,9 @@ export default function LoginPage() {
       <div>
         <p className="kicker">Acceso</p>
         <h1 className="mt-2 font-display text-4xl uppercase text-white">Ingresá a TorneoApuestas</h1>
-        <p className="mt-2 text-[14px] text-[#9a9690]">Organizá y seguí torneos con tu cuenta de Google.</p>
+        <p className="mt-2 text-[14px] text-[#9a9690]">
+          Necesitas una cuenta para apostar, ver tu historial y manejar tu saldo.
+        </p>
       </div>
       <button
         type="button"

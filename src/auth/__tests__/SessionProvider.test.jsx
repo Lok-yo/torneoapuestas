@@ -3,7 +3,7 @@
 // authenticated — and that a bootstrap failure denies protected state
 // (authenticated-identity spec "Provider or session failure").
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { SessionProvider, useSession } from '../SessionProvider.jsx'
 import { AppError } from '../../lib/errors.js'
 
@@ -18,13 +18,16 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../repositories/sessionRepository.js', () => mocks)
 
 function Probe() {
-  const { status, profile, roles, error } = useSession()
+  const { status, profile, roles, error, signOut } = useSession()
   return (
     <div>
       <span data-testid="status">{status}</span>
       <span data-testid="username">{profile?.username ?? ''}</span>
       <span data-testid="roles">{roles.join(',')}</span>
       <span data-testid="error">{error?.code ?? ''}</span>
+      <button type="button" onClick={() => signOut()}>
+        salir
+      </button>
     </div>
   )
 }
@@ -101,5 +104,54 @@ describe('SessionProvider', () => {
     await waitFor(() => expect(mocks.onAuthStateChange).toHaveBeenCalledTimes(1))
     unmount()
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders anonymous instead of crashing when onAuthStateChange throws (unconfigured identity)', async () => {
+    mocks.getCurrentSession.mockReturnValue(new Promise(() => {}))
+    mocks.onAuthStateChange.mockImplementation(() => {
+      throw new AppError('UNAVAILABLE', 'El servicio de autenticación no está disponible ahora mismo.')
+    })
+
+    renderWithProvider()
+
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('anonymous'))
+    expect(screen.getByTestId('error').textContent).toBe('UNAVAILABLE')
+  })
+
+  it('sign-out stays anonymous even if a TOKEN_REFRESHED event arrives later', async () => {
+    mocks.getCurrentSession.mockResolvedValue({ access_token: 'token', user: { id: 'user-1' } })
+    mocks.bootstrapSession.mockResolvedValue({
+      profile: { user_id: 'user-1', username: 'jugador1' },
+      roles: ['user'],
+    })
+    mocks.signOut.mockResolvedValue(undefined)
+    let emit
+    mocks.onAuthStateChange.mockImplementation((cb) => {
+      emit = cb
+      return () => {}
+    })
+
+    renderWithProvider()
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('authenticated'))
+
+    screen.getByRole('button', { name: 'salir' }).click()
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('anonymous'))
+
+    act(() => {
+      emit('TOKEN_REFRESHED', { access_token: 'token', user: { id: 'user-1' } })
+    })
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('anonymous'))
+    expect(screen.getByTestId('username').textContent).toBe('')
+  })
+
+  it('renders anonymous when getCurrentSession reports UNAVAILABLE', async () => {
+    mocks.getCurrentSession.mockRejectedValue(
+      new AppError('UNAVAILABLE', 'El servicio de autenticación no está disponible ahora mismo.'),
+    )
+
+    renderWithProvider()
+
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('anonymous'))
+    expect(screen.getByTestId('error').textContent).toBe('UNAVAILABLE')
   })
 })

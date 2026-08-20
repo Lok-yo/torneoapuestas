@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { X, AlertCircle, AlertTriangle, ExternalLink } from 'lucide-react'
-import { keccak256, encodeAbiParameters } from 'viem'
 import { useNavigate } from 'react-router-dom'
-import { useWalletConnect, useCreateMarket } from '../lib/web3/hooks.js'
+import { useWalletConnect, useCreateMarket, useHouseAccount } from '../lib/web3/hooks.js'
+import { questionIdFromOutcomeRef } from '../lib/web3/questionId.js'
+import { isLocalAnvil, registerStartggEvent, activateLocalMarket } from '../lib/web3/localDev.js'
 import { parseUsdc, formatUsdc } from '../lib/web3/format.js'
 import { MARKET_FACTORY_ADDRESS } from '../lib/web3/contracts.js'
 import { translateError } from '../lib/web3/translateError.js'
@@ -15,8 +16,9 @@ const MIN_LIQUIDITY_USDC = 100n * 1_000_000n
 export default function CreateMarketModal({ set: s, startggEventId: propEventId, onClose }) {
   const startggEventId = propEventId ?? s.startgg_event_id;
   const navigate = useNavigate()
-  const { isConnected, connectors, connect, connectError } = useWalletConnect()
+  const { isConnected, connectors, connect, connectError, isCorrectChain, switchToAmoy } = useWalletConnect()
   const { createMarket, isPending } = useCreateMarket()
+  const { account } = useHouseAccount()
 
   const [seedLiquidity, setSeedLiquidity] = useState('100')
   const [error, setError] = useState(null)
@@ -58,14 +60,16 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
       setError(`La liquidez inicial debe ser al menos ${formatUsdc(MIN_LIQUIDITY_USDC)} USDC.`)
       return
     }
+    const totalCost = CREATION_BOND_USDC + seed
+    if (!isLocalAnvil() && account.balance < totalCost) {
+      setError(
+        `Esta línea cuesta ${formatUsdc(totalCost)} USDC (1 de bono + ${formatUsdc(seed)} de liquidez) y en la casa tenés ${formatUsdc(account.balance)}. Agregá fondos o bajá la liquidez.`,
+      )
+      return
+    }
 
     try {
-      const questionId = keccak256(
-        encodeAbiParameters(
-          [{ type: 'uint256' }, { type: 'uint8' }, { type: 'bytes32' }],
-          [BigInt(startggEventId || 0), marketType, keccak256(new TextEncoder().encode(outcomeRef))],
-        ),
-      )
+      const questionId = questionIdFromOutcomeRef(startggEventId || 0, marketType, outcomeRef)
 
       const isDuplicate = await checkDuplicateMarketByQuestionId(questionId)
       if (isDuplicate) {
@@ -74,6 +78,10 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
       }
 
       const totalApproval = CREATION_BOND_USDC + seed
+
+      if (startggEventId && isLocalAnvil()) {
+        await registerStartggEvent(startggEventId)
+      }
 
       try {
         await createMarket({
@@ -88,6 +96,14 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
         console.error('[CreateMarketModal] createMarket failed', txErr)
         setError(translateError(txErr) || 'La transacción falló. Verificá tu wallet y saldo USDC.')
         return
+      }
+
+      if (isLocalAnvil()) {
+        try {
+          await activateLocalMarket(questionId)
+        } catch (activateErr) {
+          console.warn('[CreateMarketModal] local activate failed', activateErr)
+        }
       }
 
       navigate(`/mercados/${questionId}`)
@@ -146,6 +162,12 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
             )}
           </div>
 
+          <p className="text-[12px] text-zinc-400">
+            Abrir la línea no usa el pozo de los apostadores. Los 101 USDC (1 de bono anti-spam + 100 de semilla del
+            mercado on-chain) los cubre la simulación local. La plata con la que se apuesta es la que cada uno mete en
+            <span className="text-white"> Agregar fondos</span>. Casa ahora: {formatUsdc(account.balance)} USDC.
+          </p>
+
           <MarketPreview
             tournament={{ name: `${s.entrant_a_name ?? '?'} vs ${s.entrant_b_name ?? '?'}`, game_id: 'ssbu', created_at: s.event_starts_at }}
             marketType={marketType}
@@ -163,7 +185,7 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
           <div className="mt-2 flex flex-col gap-3">
             {!isConnected ? (
               <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
-                <p className="mb-1 text-center text-xs text-zinc-400">Elegí tu wallet para pagar y crear el mercado</p>
+                <p className="mb-1 text-center text-xs text-zinc-400">Elige tu wallet para pagar y crear el mercado</p>
                 {connectors.map((connector) => (
                   <button
                     key={connector.uid}
@@ -185,6 +207,14 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
                   <ExternalLink size={10} /> ¿Qué es una wallet?
                 </a>
               </div>
+            ) : !isCorrectChain ? (
+              <button
+                type="button"
+                onClick={switchToAmoy}
+                className="w-full border border-amber-500/40 bg-amber-950/20 py-3 text-sm font-semibold text-amber-300"
+              >
+                Cambiar a chain 80002 (Anvil / Amoy)
+              </button>
             ) : (
               <button
                 type="submit"

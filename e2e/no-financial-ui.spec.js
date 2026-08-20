@@ -7,18 +7,16 @@
 import { test, expect } from '@playwright/test'
 
 test.describe('Production build excludes all financial/prediction-market UI', () => {
-  test('the wallet route 404s when web3 is off — no legacy TCRED wallet', async ({ page }) => {
+  test('the wallet route requires authentication', async ({ page }) => {
     await page.goto('/wallet')
 
-    await expect(page.getByText('404')).toBeVisible()
-    await expect(page.getByText('No encontramos esta página.')).toBeVisible()
+    await expect(page).toHaveURL(/\/login/)
   })
 
-  test('the market-detail route 404s when web3 is off — no legacy prediction UI', async ({ page }) => {
+  test('the market-detail route does not 404 for a custodial market id', async ({ page }) => {
     await page.goto('/mercados/00000000-0000-0000-0000-000000000001')
 
-    await expect(page.getByText('404')).toBeVisible()
-    await expect(page.getByText('No encontramos esta página.')).toBeVisible()
+    await expect(page.getByText('404')).toHaveCount(0)
   })
 
   test('the home page shows no prediction-market section or betting copy', async ({ page }) => {

@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, MinusCircle, RefreshCw, AlertCircle } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowDownRight, ArrowUpRight, MinusCircle, PlusCircle, RefreshCw, AlertCircle } from 'lucide-react'
 import { useSession } from '../auth/SessionProvider.jsx'
-import { getWallet, withdrawFunds, getTransactionHistory } from '../repositories/walletRepository.js'
+import { getWallet, withdrawFunds, depositFunds, getTransactionHistory } from '../repositories/walletRepository.js'
 import { formatDateTime } from '../lib/format.js'
 import { toAppError } from '../lib/errors.js'
+import { FEATURE_FLAGS } from '../config/featureFlags.js'
+import OnchainWalletView from './onchain/OnchainWalletView.jsx'
 
 export default function WalletPage() {
+  if (FEATURE_FLAGS.web3) return <OnchainWalletView />
   return <LegacyWalletPage />
 }
 
@@ -75,9 +79,10 @@ function LegacyWalletPage() {
   const { profile } = useSession()
   const [walletState, setWalletState] = useState({ status: 'loading', wallet: null, transactions: [], error: null })
   const [withdrawAmount, setWithdrawAmount] = useState('20')
+  const [depositAmount, setDepositAmount] = useState('50')
   const [actionError, setActionError] = useState(null)
   const [actionPending, setActionPending] = useState(false)
-  const [activeModal, setActiveModal] = useState(null) // 'withdraw' | null
+  const [activeModal, setActiveModal] = useState(null) // 'withdraw' | 'deposit' | null
 
   const loadData = async () => {
     setWalletState((prev) => ({ ...prev, status: 'loading', error: null }))
@@ -92,6 +97,26 @@ function LegacyWalletPage() {
   useEffect(() => {
     loadData()
   }, [])
+
+  const handleDeposit = async (e) => {
+    e.preventDefault()
+    const num = parseFloat(depositAmount)
+    if (isNaN(num) || num <= 0) {
+      setActionError('Ingresá un monto válido para cargar.')
+      return
+    }
+    setActionPending(true)
+    setActionError(null)
+    try {
+      await depositFunds(num, `carga-${Date.now()}`)
+      setActiveModal(null)
+      await loadData()
+    } catch (err) {
+      setActionError(toAppError(err).message)
+    } finally {
+      setActionPending(false)
+    }
+  }
 
   const handleWithdraw = async (e) => {
     e.preventDefault()
@@ -208,7 +233,17 @@ function LegacyWalletPage() {
         </div>
 
         <div className="flex flex-col justify-center gap-3 rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">Treasury desk</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">Caja</p>
+          <button
+            type="button"
+            onClick={() => {
+              setActionError(null)
+              setActiveModal('deposit')
+            }}
+            className="flex items-center justify-center gap-2 bg-[#b6ff3a] py-3 text-sm font-semibold text-[#0a0c08]"
+          >
+            <PlusCircle size={18} /> Cargar saldo
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -217,8 +252,11 @@ function LegacyWalletPage() {
             }}
             className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 py-3 text-sm font-semibold text-zinc-200 hover:border-zinc-500"
           >
-            <MinusCircle size={18} /> Retirar Fondos
+            <MinusCircle size={18} /> Retirar
           </button>
+          <Link to="/apuestas" className="text-center text-[12px] font-semibold text-lime hover:underline">
+            Ver historial de apuestas
+          </Link>
         </div>
       </div>
 
@@ -260,6 +298,50 @@ function LegacyWalletPage() {
           </div>
         )}
       </div>
+
+      {activeModal === 'deposit' && (
+        <ModalDialog labelledBy="deposit-modal-title" onClose={() => setActiveModal(null)}>
+          <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6">
+            <h3 id="deposit-modal-title" className="text-lg font-bold text-zinc-50">Cargar saldo</h3>
+            <p className="mt-1 text-xs text-zinc-400">
+              El monto se acredita en tu billetera para apostar en las líneas de predicción.
+            </p>
+            <form onSubmit={handleDeposit} className="mt-6 flex flex-col gap-4">
+              <div>
+                <label htmlFor="deposit-amount-input" className="mb-1 block text-xs font-medium text-zinc-400">
+                  Monto (USD)
+                </label>
+                <input
+                  id="deposit-amount-input"
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500"
+                />
+              </div>
+              {actionError && <p className="text-xs text-rose-400">{actionError}</p>}
+              <div className="mt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className="flex-1 rounded-xl border border-zinc-800 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-900"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionPending}
+                  className="flex-1 bg-[#b6ff3a] py-2.5 text-sm font-semibold text-[#0a0c08] disabled:opacity-50"
+                >
+                  {actionPending ? 'Acreditando…' : 'Cargar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </ModalDialog>
+      )}
 
       {activeModal === 'withdraw' && (
         <ModalDialog labelledBy="withdraw-modal-title" onClose={() => setActiveModal(null)}>

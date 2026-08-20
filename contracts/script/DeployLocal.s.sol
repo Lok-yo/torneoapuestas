@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Script, console} from "forge-std/Script.sol";
 import {MarketFactory} from "../src/MarketFactory.sol";
 import {ResolutionAdapter} from "../src/ResolutionAdapter.sol";
+import {HouseBank} from "../src/HouseBank.sol";
 import {MockConditionalTokens} from "../test/mocks/MockConditionalTokens.sol";
 import {MockERC20} from "../test/mocks/MockERC20.sol";
 import {MockFPMMFactory} from "../test/mocks/MockFPMMFactory.sol";
@@ -33,12 +34,14 @@ contract DeployLocal is Script {
         );
 
         factory.setResolutionAdapter(address(adapter));
-        
-        // Mint initial USDC to the user's wallet so they can test
-        usdc.mint(0x2BeA3c5B2F7a64b649c9faD5db2609dC7dFdFb4a, 1000000 * 10**6);
-        
-        // Also send them some native fake ETH/POL for gas
-        payable(0x2BeA3c5B2F7a64b649c9faD5db2609dC7dFdFb4a).transfer(10 ether);
+
+        HouseBank house = new HouseBank(usdc, factory, adapter, ctf);
+
+        // Seed USDC for organizers who open lines (creation bond + liquidity).
+        // Player bankroll comes from HouseBank.addFunds, not this wallet mint.
+        usdc.mint(deployerAddr, 250 * 10 ** 6);
+        usdc.mint(0x70997970C51812dc3A010C7d01b50e0d17dc79C8, 250 * 10 ** 6);
+        usdc.mint(0x2BeA3c5B2F7a64b649c9faD5db2609dC7dFdFb4a, 250 * 10 ** 6);
 
         vm.stopBroadcast();
 
@@ -47,5 +50,7 @@ contract DeployLocal is Script {
         console.log("FPMM_FACTORY_ADDRESS=%s", address(fpmmFactory));
         console.log("MARKET_FACTORY_ADDRESS=%s", address(factory));
         console.log("RESOLUTION_ADAPTER_ADDRESS=%s", address(adapter));
+        console.log("HOUSE_BANK_ADDRESS=%s", address(house));
+        console.log("HOUSE_BPS=500");
     }
 }

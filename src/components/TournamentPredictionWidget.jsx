@@ -1,333 +1,405 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { TrendingUp, ArrowRight, CheckCircle, PlusCircle, Search, Filter } from 'lucide-react'
-import { listMarkets, createPredictionMarket, buyMarketShares } from '../repositories/marketRepository.js'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { createPublicClient, http } from 'viem'
+import { polygonAmoy } from 'viem/chains'
 import { useSession } from '../auth/SessionProvider.jsx'
-import { toAppError } from '../lib/errors.js'
+import { sessionAccountId, housePlayerId } from '../lib/web3/accountId.js'
+import { useWalletConnect, useHouseTrade, useHouseAccount } from '../lib/web3/hooks.js'
+import { MARKET_FACTORY_ABI, MARKET_FACTORY_ADDRESS, MARKET_STATE, HOUSE_BANK_ABI, HOUSE_BANK_ADDRESS } from '../lib/web3/contracts.js'
+import { matchQuestionId } from '../lib/web3/questionId.js'
+import { parseUsdc, formatUsdc, formatOdds, estimatedPayout, maxBetOnSide, minBetOnSide, OPENING_MAX, openPositionPayout } from '../lib/web3/format.js'
+import { translateError } from '../lib/web3/translateError.js'
+import { marketStateCopy } from '../lib/web3/marketLabels.js'
+import { roundLabel } from '../lib/bets.js'
+import CreateMarketModal from './CreateMarketModal.jsx'
+import BetPayoutLines from './BetPayoutLines.jsx'
+import { useI18n } from '../i18n/I18nProvider.jsx'
 
-function outcomeTone(label) {
-  const t = String(label || '').toLowerCase()
-  if (/^(sí|si|yes)$/.test(t)) return 'yes'
-  if (/^(no)$/.test(t)) return 'no'
-  return 'neutral'
-}
+export default function TournamentPredictionWidget({ tournamentId, sets = [], startggEventId }) {
+  const location = useLocation()
+  const { status: sessionStatus, profile, session } = useSession()
+  const accountId = sessionAccountId(session?.user?.id)
+  const isAuthed = sessionStatus === 'authenticated' && Boolean(profile?.username)
+  const { address, isConnected, connectors, connect, isCorrectChain, switchToAmoy } = useWalletConnect()
+  const { placeBet, isPending } = useHouseTrade()
+  const { account, refetch: refetchHouse } = useHouseAccount()
+  const [receipt, setReceipt] = useState(null)
 
-export default function TournamentPredictionWidget({ tournamentId, isOrganizer }) {
-  const { sessionStatus } = useSession()
-  const [markets, setMarkets] = useState([])
-  const [status, setStatus] = useState('loading')
+  const [markets, setMarkets] = useState({})
+  const [selectedSet, setSelectedSet] = useState(null)
+  const [stake, setStake] = useState('10')
+  const [notice, setNotice] = useState(null)
+  const [actionError, setActionError] = useState(null)
+  const { t } = useI18n()
 
-  const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState('ALL')
-  const [categoryFilter, setCategoryFilter] = useState('ALL')
+  const lines = useMemo(
+    () => (sets ?? []).filter((s) => s.entrant_a_name && s.entrant_b_name),
+    [sets],
+  )
 
-  const [buyingMarketId, setBuyingMarketId] = useState(null)
-  const [buyingOutcomeId, setBuyingOutcomeId] = useState(null)
-  const [buyPending, setBuyPending] = useState(false)
-  const [buySuccess, setBuySuccess] = useState(null)
-
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [newQuestion, setNewQuestion] = useState('')
-  const [createPending, setCreatePending] = useState(false)
-
-  const loadMarkets = async () => {
-    setStatus('loading')
-    try {
-      const data = await listMarkets(tournamentId)
-      setMarkets(data)
-      setStatus('ready')
-    } catch {
-      setStatus('error')
+  const refreshMarkets = async () => {
+    if (!MARKET_FACTORY_ADDRESS || lines.length === 0) {
+      setMarkets({})
+      return
     }
+    const client = createPublicClient({
+      chain: polygonAmoy,
+      transport: http(import.meta.env.VITE_AMOY_RPC_URL || undefined),
+    })
+    const next = {}
+    await Promise.all(
+      lines.map(async (s) => {
+        const questionId = matchQuestionId(s.startgg_event_id || startggEventId, s.startgg_set_id)
+        try {
+          const data = await client.readContract({
+            address: MARKET_FACTORY_ADDRESS,
+            abi: MARKET_FACTORY_ABI,
+            functionName: 'markets',
+            args: [questionId],
+          })
+          const state = Number(data[5])
+          let book = null
+          let userSide = 0
+          let userStake0 = 0n
+          let userStake1 = 0n
+          if (HOUSE_BANK_ADDRESS && state === MARKET_STATE.ACTIVE) {
+            try {
+              book = await client.readContract({
+                address: HOUSE_BANK_ADDRESS,
+                abi: HOUSE_BANK_ABI,
+                functionName: 'book',
+                args: [questionId],
+              })
+              if (address && accountId) {
+                userSide = Number(
+                  await client.readContract({
+                    address: HOUSE_BANK_ADDRESS,
+                    abi: HOUSE_BANK_ABI,
+                    functionName: 'pickOf',
+                    args: [questionId, address, accountId],
+                  }),
+                )
+                const pid = housePlayerId(address, accountId)
+                if (pid) {
+                  const [s0, s1] = await Promise.all([
+                    client.readContract({
+                      address: HOUSE_BANK_ADDRESS,
+                      abi: HOUSE_BANK_ABI,
+                      functionName: 'userStake',
+                      args: [questionId, pid, 0n],
+                    }),
+                    client.readContract({
+                      address: HOUSE_BANK_ADDRESS,
+                      abi: HOUSE_BANK_ABI,
+                      functionName: 'userStake',
+                      args: [questionId, pid, 1n],
+                    }),
+                  ])
+                  userStake0 = s0 ?? 0n
+                  userStake1 = s1 ?? 0n
+                }
+              }
+            } catch {
+              book = null
+            }
+          }
+          next[s.startgg_set_id] = { questionId, state, book, userSide, userStake0, userStake1 }
+        } catch {
+          next[s.startgg_set_id] = { questionId, state: 0 }
+        }
+      }),
+    )
+    setMarkets(next)
   }
 
   useEffect(() => {
-    if (tournamentId) {
-      loadMarkets()
-    }
+    refreshMarkets()
+    const id = setInterval(refreshMarkets, 4000)
+    return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tournamentId])
+  }, [lines.map((s) => s.startgg_set_id).join(','), startggEventId, address, accountId])
 
-  const handleQuickBuy = async (marketId, outcomeId, shares = 10) => {
-    setBuyingMarketId(marketId)
-    setBuyingOutcomeId(outcomeId)
-    setBuyPending(true)
-    setBuySuccess(null)
-    try {
-      await buyMarketShares(marketId, outcomeId, shares)
-      setBuySuccess('¡Acciones compradas con éxito!')
-      await loadMarkets()
-    } catch (err) {
-      alert(toAppError(err).message)
-    } finally {
-      setBuyPending(false)
-      setBuyingMarketId(null)
-      setBuyingOutcomeId(null)
+  const handleBet = async (line, outcomeIndex) => {
+    setActionError(null)
+    setNotice(null)
+    const info = markets[line.startgg_set_id]
+    if (!info || info.state !== MARKET_STATE.ACTIVE) {
+      setActionError(t('pred.lineClosed'))
+      return
     }
-  }
-
-  const handleCreateMarket = async (e) => {
-    e.preventDefault()
-    if (!newQuestion.trim()) return
-    setCreatePending(true)
-    try {
-      await createPredictionMarket(tournamentId, newQuestion.trim())
-      setNewQuestion('')
-      setShowCreateModal(false)
-      await loadMarkets()
-    } catch (err) {
-      alert(toAppError(err).message)
-    } finally {
-      setCreatePending(false)
+    if (info.userSide && info.userSide !== outcomeIndex + 1) {
+      setActionError(t('pred.alreadyOther'))
+      return
     }
-  }
-
-  const filteredMarkets = markets.filter((m) => {
-    const matchesSearch = !searchQuery || m.question.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === 'ALL' || m.status === statusFilter
-    const matchesCategory = categoryFilter === 'ALL' || m.category === categoryFilter
-    return matchesSearch && matchesStatus && matchesCategory
-  })
-
-  if (status === 'loading') {
-    return (
-      <div className="border border-[#242424] bg-[#0c0c0c] p-5 text-center text-xs text-[#6f6b64]">Cargando mercados de predicción…</div>
-    )
+    const name = outcomeIndex === 0 ? line.entrant_a_name : line.entrant_b_name
+    const amount = parseUsdc(stake)
+    const book = info.book
+    const sideStake = (outcomeIndex === 0 ? book?.stake0 ?? book?.[0] : book?.stake1 ?? book?.[1]) ?? 0n
+    const otherStake = (outcomeIndex === 0 ? book?.stake1 ?? book?.[1] : book?.stake0 ?? book?.[0]) ?? 0n
+    const cap = maxBetOnSide(sideStake, otherStake)
+    const floor = minBetOnSide(sideStake, otherStake)
+    if (amount < floor) {
+      setActionError(t('pred.tooSmall', { amount: formatUsdc(floor) }))
+      return
+    }
+    if (amount > cap) {
+      setActionError(t('pred.tooBig', { amount: formatUsdc(cap) }))
+      return
+    }
+    const est = estimatedPayout(amount, sideStake, otherStake)
+    try {
+      await placeBet({
+        questionId: info.questionId,
+        investmentAmount: amount,
+        outcomeIndex: BigInt(outcomeIndex),
+      })
+      await refreshMarkets()
+      await refetchHouse()
+      setNotice(null)
+      setReceipt({
+        name,
+        stake: formatUsdc(amount),
+        profit: est.refund || est.profit <= 0n ? null : formatUsdc(est.profit),
+        payout: est.refund || est.profit <= 0n ? null : formatUsdc(amount + est.profit),
+        refund: est.refund || otherStake === 0n,
+      })
+    } catch (err) {
+      setActionError(translateError(err) || t('pred.txFail'))
+    }
   }
 
   return (
-    <div className="flex flex-col gap-3 border border-[#242424] bg-[#0c0c0c] p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="text-[#b11226]" size={18} />
-          <h2 className="font-display text-xl text-[#edeae3]">Predicciones del Torneo</h2>
-        </div>
-        {isOrganizer && (
-          <button
-            type="button"
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-1.5 border border-[#242424] px-3 py-1.5 text-xs font-semibold text-[#edeae3] hover:border-[#b11226] transition"
-          >
-            <PlusCircle size={14} /> Crear Mercado
-          </button>
-        )}
+    <div className="flex flex-col gap-5">
+      <div>
+        <p className="kicker">{t('pred.kicker')}</p>
+        <h2 className="mt-1 font-display text-3xl uppercase text-white">{t('pred.title')}</h2>
+        <p className="mt-1 max-w-xl text-[14px] text-zinc-400">{t('pred.intro')}</p>
       </div>
 
-      {markets.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
+      {!isAuthed && (
+        <div className="border border-zinc-800 bg-[#0b0d12] px-4 py-3 text-[14px] text-zinc-300">
+          {t('pred.needAccount')}{' '}
+          <Link to="/login" state={{ from: location }} className="font-semibold text-lime hover:underline">
+            {t('pred.signInGoogle')}
+          </Link>
+        </div>
+      )}
+
+      {isAuthed && !isConnected && (
+        <div className="flex flex-col gap-2 border border-zinc-800 bg-[#0b0d12] p-4">
+          <p className="text-[14px] text-zinc-300">{t('pred.connectMm')}</p>
+          {connectors.map((connector) => (
+            <button
+              key={connector.uid}
+              type="button"
+              onClick={() => connect(connector)}
+              className="btn-lime py-2.5"
+            >
+              {t('wallet.connectWallet', { name: connector.name === 'Injected' ? 'MetaMask' : connector.name })}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isAuthed && isConnected && !isCorrectChain && (
+        <button type="button" onClick={switchToAmoy} className="border border-amber-500/40 bg-amber-950/20 px-4 py-3 text-left text-[13px] font-semibold text-amber-300">
+          {t('pred.switchChain')}
+        </button>
+      )}
+
+      {receipt && (
+        <div className="border border-lime/40 bg-lime/10 px-4 py-4 text-[13px] text-zinc-200" role="status">
+          <p className="font-display text-2xl uppercase text-lime">{t('pred.recorded')}</p>
+          <p className="mt-1">{t('pred.toPlayer', { stake: receipt.stake, name: receipt.name })}</p>
+          <p className="mt-1 text-lime">
+            {receipt.payout
+              ? t('pred.ifCovered', { payout: receipt.payout, stake: receipt.stake, profit: receipt.profit })
+              : t('pred.waitingOther')}
+          </p>
+        </div>
+      )}
+      {actionError && <p className="border border-rose-500/20 bg-rose-950/20 px-4 py-2 text-[13px] text-rose-400">{actionError}</p>}
+
+      {isAuthed && isConnected && (
+        <label className="flex flex-wrap items-center gap-3 text-[13px] text-zinc-400">
+          {t('pred.stakeLabel')}
+          <span className="inline-flex items-center border border-zinc-800 bg-zinc-950">
             <input
-              type="text"
-              aria-label="Buscar mercados"
-              placeholder="Buscar mercados…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-950/80 pl-9 pr-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 outline-none focus:border-violet-500"
+              type="number"
+              min="1"
+              step="1"
+              value={stake}
+              onChange={(e) => setStake(e.target.value)}
+              className="h-9 w-20 bg-transparent px-3 font-mono text-[13px] text-white outline-none"
             />
-          </div>
-
-          <div className="flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-1.5 text-xs text-zinc-300">
-            <Filter size={14} className="text-zinc-500" />
-            <label htmlFor="widget-status-filter" className="text-[11px] text-zinc-500">
-              Estado:
-            </label>
-            <select
-              id="widget-status-filter"
-              aria-label="Filtrar por estado"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-transparent text-xs text-zinc-100 outline-none cursor-pointer"
-            >
-              <option value="ALL" className="bg-zinc-900">
-                Todos
-              </option>
-              <option value="OPEN" className="bg-zinc-900">
-                Abiertos
-              </option>
-              <option value="RESOLVED" className="bg-zinc-900">
-                Resueltos
-              </option>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-1.5 text-xs text-zinc-300">
-            <label htmlFor="widget-category-filter" className="text-[11px] text-zinc-500">
-              Categoría:
-            </label>
-            <select
-              id="widget-category-filter"
-              aria-label="Filtrar por categoría"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="bg-transparent text-xs text-zinc-100 outline-none cursor-pointer"
-            >
-              <option value="ALL" className="bg-zinc-900">
-                Todas
-              </option>
-              <option value="TOURNAMENT" className="bg-zinc-900">
-                Torneo
-              </option>
-              <option value="MATCH" className="bg-zinc-900">
-                Partido
-              </option>
-              <option value="PLAYER" className="bg-zinc-900">
-                Jugador
-              </option>
-              <option value="SPECIAL" className="bg-zinc-900">
-                Especial
-              </option>
-            </select>
-          </div>
-        </div>
+            <span className="pr-3 text-[11px] font-bold uppercase tracking-wider text-lime">USDC</span>
+          </span>
+          <span className="text-[12px] text-zinc-500">
+            {t('pred.houseBal', { amount: formatUsdc(account.balance) })}
+            {account.balance <= 0n && (
+              <>
+                {' · '}
+                <Link to="/wallet" className="font-semibold text-lime hover:underline">
+                  {t('pred.addFunds')}
+                </Link>
+              </>
+            )}
+          </span>
+        </label>
       )}
 
-      {buySuccess && (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-medium text-emerald-400">
-          <CheckCircle size={16} /> {buySuccess}
-        </div>
-      )}
-
-      {filteredMarkets.length === 0 ? (
-        <div className="py-6 text-center">
-          <p className="text-sm text-zinc-500">No hay mercados abiertos — creá uno desde Brackets</p>
-        </div>
+      {lines.length === 0 ? (
+        <p className="border border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">{t('pred.noSets')}</p>
       ) : (
-        <div className="grid gap-4">
-          {filteredMarkets.map((m) => {
-            const outcomes = m.market_outcomes || []
+        <div className="flex flex-col gap-3">
+          {lines.map((line) => {
+            const info = markets[line.startgg_set_id]
+            const copy = marketStateCopy(info?.state ?? 0)
+            const open = info?.state === MARKET_STATE.ACTIVE
+            const canOpen = isAuthed && isConnected && (!info || info.state === MARKET_STATE.NONE) && line.state !== 'COMPLETED'
             return (
-              <div
-                key={m.id}
-                className="flex flex-col justify-between gap-4 rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-5 backdrop-blur-md transition hover:border-violet-500/30"
-              >
-                <div>
-                  <div className="mb-1 flex items-center justify-between text-xs text-zinc-500">
-                    <span className="font-mono uppercase tracking-wider">{m.category}</span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                        m.status === 'OPEN'
-                          ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                          : 'bg-zinc-800 text-zinc-400'
-                      }`}
-                    >
-                      {m.status}
-                    </span>
+              <article key={line.startgg_set_id} className="border border-zinc-800 bg-[#0b0d12]">
+                <div className="flex items-start justify-between gap-3 border-b border-zinc-800 px-4 py-3">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+                      {roundLabel(line.round)}
+                      {line.phase_name ? ` · ${line.phase_name}` : ''}
+                    </p>
+                    <h3 className="mt-0.5 font-display text-2xl uppercase leading-none text-white">
+                      {line.entrant_a_name} <span className="text-zinc-600">vs</span> {line.entrant_b_name}
+                    </h3>
                   </div>
-                  <h3 className="text-sm font-bold text-zinc-100">{m.question}</h3>
+                  <span className={`shrink-0 px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                    open ? 'bg-lime text-[#0a0c08]' : 'border border-zinc-700 text-zinc-400'
+                  }`}>
+                    {copy.label}
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  {outcomes.map((o) => {
-                    const prob = Math.round(Number(o.price) * 100)
-                    const isBuying = buyingMarketId === m.id && buyingOutcomeId === o.id
-                    const tone = outcomeTone(o.label)
-                    const bar =
-                      tone === 'yes' ? 'from-emerald-500 to-teal-400' : tone === 'no' ? 'from-rose-500 to-pink-400' : 'from-violet-500 to-indigo-400'
+                <div className="grid sm:grid-cols-2">
+                  {[line.entrant_a_name, line.entrant_b_name].map((name, idx) => {
+                    const book = info?.book
+                    const stake0 = book?.stake0 ?? book?.[0] ?? 0n
+                    const stake1 = book?.stake1 ?? book?.[1] ?? 0n
+                    const odds0 = book?.odds0 ?? book?.[2] ?? 0n
+                    const odds1 = book?.odds1 ?? book?.[3] ?? 0n
+                    const executable = Boolean(book?.executable ?? book?.[4])
+                    const sideStake = idx === 0 ? stake0 : stake1
+                    const otherStake = idx === 0 ? stake1 : stake0
+                    const odds = idx === 0 ? odds0 : odds1
+                    const pool = stake0 + stake1
+                    const pct = pool > 0n ? Number((sideStake * 100n) / pool) : 50
+                    const locked = Boolean(info?.userSide) && info.userSide !== idx + 1
+                    const mine = info?.userSide === idx + 1
+                    const myStake = idx === 0 ? info?.userStake0 ?? 0n : info?.userStake1 ?? 0n
+                    const live = openPositionPayout(myStake, sideStake, otherStake)
                     return (
-                      <div
-                        key={o.id}
-                        className="flex flex-col justify-between rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-3"
-                      >
-                        <div className="flex items-center justify-between text-xs font-semibold text-zinc-200">
-                          <span>{o.label}</span>
-                          <span
-                            className={`font-mono ${
-                              tone === 'yes' ? 'text-emerald-400' : tone === 'no' ? 'text-rose-400' : 'text-violet-400'
-                            }`}
-                          >
-                            {prob}%
-                          </span>
+                      <div key={`${line.startgg_set_id}-${idx}`} className={`flex flex-col gap-3 p-4 ${idx === 0 ? 'sm:border-r sm:border-zinc-800' : ''}`}>
+                        <p className="text-[15px] font-semibold text-white">{name}</p>
+                        <div className="flex items-end justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{t('pred.odds')}</p>
+                            <p className="font-mono text-2xl text-lime">{formatOdds(odds || 0n) === '—' ? '2.00' : formatOdds(odds)}</p>
+                          </div>
+                          <p className="text-right text-[11px] text-zinc-500">
+                            {t('pred.poolPct', { pct })}
+                            <br />
+                            {formatUsdc(sideStake)} USDC
+                          </p>
                         </div>
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-950">
-                          <div className={`h-full bg-gradient-to-r ${bar}`} style={{ width: `${prob}%` }} />
+                        <div className="h-1.5 overflow-hidden bg-zinc-800">
+                          <div className="h-full bg-lime" style={{ width: `${pct}%` }} />
                         </div>
-
-                        {sessionStatus === 'authenticated' && m.status === 'OPEN' && (
-                          <button
-                            type="button"
-                            disabled={buyPending}
-                            onClick={() => handleQuickBuy(m.id, o.id, 10)}
-                            className={`mt-3 w-full rounded-lg py-1.5 text-[11px] font-semibold text-white disabled:opacity-50 ${
-                              tone === 'yes'
-                                ? 'bg-emerald-600/85 hover:bg-emerald-500'
-                                : tone === 'no'
-                                  ? 'bg-rose-600/85 hover:bg-rose-500'
-                                  : 'bg-violet-600/80 hover:bg-violet-500'
-                            }`}
-                          >
-                            {isBuying ? 'Comprando…' : `Comprar 10 · $${(10 * Number(o.price)).toFixed(2)}`}
-                          </button>
+                        {mine && myStake > 0n && (
+                          <div className="border border-lime/30 bg-lime/5 px-3 py-2">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-lime">{t('pred.yourBet')}</p>
+                            <div className="mt-1">
+                              <BetPayoutLines stake={myStake} profit={live.profit} pending={live.pending} />
+                            </div>
+                          </div>
+                        )}
+                        {open && isAuthed && isConnected ? (
+                          locked ? (
+                            <p className="text-[12px] text-zinc-500">{t('pred.otherSideLocked')}</p>
+                          ) : (
+                            (() => {
+                              const amt = parseUsdc(stake)
+                              const est = estimatedPayout(amt, sideStake, otherStake)
+                              const cap = maxBetOnSide(sideStake, otherStake)
+                              const floor = minBetOnSide(sideStake, otherStake)
+                              const blocked = est.overLimit || est.underLimit || amt <= 0n
+                              const verb = mine ? t('pred.addStake') : t('pred.bet')
+                              return (
+                                <div className="flex flex-col gap-1.5">
+                                  <button
+                                    type="button"
+                                    disabled={isPending || blocked}
+                                    onClick={() => handleBet(line, idx)}
+                                    className="btn-lime py-2.5 text-[12px] disabled:opacity-50"
+                                  >
+                                    {isPending ? t('pred.betting') : `${verb} ${stake} USDC`}
+                                  </button>
+                                  {mine && myStake > 0n && (
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{t('pred.addNow')}</p>
+                                  )}
+                                  <BetPayoutLines stake={amt} profit={est.profit} pending={est.refund || blocked} />
+                                  <p className="text-[11px] text-zinc-500">
+                                    {t('pred.range', { min: formatUsdc(floor), max: formatUsdc(cap) })}
+                                  </p>
+                                  {otherStake === 0n && (
+                                    <p className="text-[11px] text-amber-300">{t('pred.openingHint', { amount: formatUsdc(OPENING_MAX) })}</p>
+                                  )}
+                                  {est.overLimit && (
+                                    <p className="text-[11px] text-amber-300">{t('pred.tooBig', { amount: formatUsdc(cap) })}</p>
+                                  )}
+                                  {est.underLimit && (
+                                    <p className="text-[11px] text-amber-300">{t('pred.tooSmall', { amount: formatUsdc(floor) })}</p>
+                                  )}
+                                </div>
+                              )
+                            })()
+                          )
+                        ) : (
+                          <p className="text-[12px] text-zinc-600">{copy.hint}</p>
                         )}
                       </div>
                     )
                   })}
                 </div>
 
-                <div className="flex justify-end border-t border-zinc-900 pt-2">
-                  <Link
-                    to={`/mercados/${m.id}`}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-violet-400 hover:text-violet-300"
-                  >
-                    Ver detalles y operar <ArrowRight size={12} />
-                  </Link>
-                </div>
-              </div>
+                {open && info?.questionId && (
+                  <div className="border-t border-zinc-800 px-4 py-2">
+                    <Link to={`/mercados/${info.questionId}`} className="text-[12px] font-semibold text-lime hover:underline">
+                      {t('pred.seeDetail')}
+                    </Link>
+                  </div>
+                )}
+                {canOpen && (
+                  <div className="border-t border-zinc-800 px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSet(line)}
+                      className="btn-ghost w-full py-2.5 text-[12px]"
+                    >
+                      {t('pred.openLine')}
+                    </button>
+                  </div>
+                )}
+              </article>
             )
           })}
         </div>
       )}
 
-      {showCreateModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="create-market-modal-title"
-        >
-          <div className="w-full max-w-md rounded-3xl border border-violet-500/20 bg-zinc-950 p-6 shadow-2xl">
-            <h3 id="create-market-modal-title" className="mb-2 text-lg font-bold text-zinc-50">
-              Crear Mercado de Predicción
-            </h3>
-            <p className="mb-4 text-xs text-zinc-400">
-              Definí una pregunta binaria (SÍ / NO) sobre este torneo para que la comunidad opere acciones.
-            </p>
-
-            <form onSubmit={handleCreateMarket} className="flex flex-col gap-4">
-              <div>
-                <label htmlFor="widget-question-input" className="mb-1 block text-xs font-medium text-zinc-400">
-                  Pregunta del Mercado
-                </label>
-                <input
-                  id="widget-question-input"
-                  type="text"
-                  required
-                  placeholder="Ej: ¿Gana @jugador1 el torneo?"
-                  value={newQuestion}
-                  onChange={(e) => setNewQuestion(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="rounded-xl border border-zinc-800 px-4 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-900"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={createPending}
-                  className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-                >
-                  {createPending ? 'Creando…' : 'Crear Mercado'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {selectedSet && (
+        <CreateMarketModal
+          set={selectedSet}
+          startggEventId={selectedSet.startgg_event_id || startggEventId}
+          onClose={() => {
+            setSelectedSet(null)
+            refreshMarkets()
+          }}
+        />
       )}
     </div>
   )

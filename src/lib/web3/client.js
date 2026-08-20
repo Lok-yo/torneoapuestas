@@ -5,23 +5,46 @@
 // web3 hook, which the flag-gated routes never render while the flag is
 // off. See src/App.jsx and src/main.jsx.
 import { createConfig, http } from 'wagmi'
+import { defineChain } from 'viem'
 import { polygonAmoy } from 'wagmi/chains'
-import { injected, walletConnect, coinbaseWallet, safe } from 'wagmi/connectors'
+import { injected, walletConnect } from 'wagmi/connectors'
+
+const rpc = import.meta.env.VITE_AMOY_RPC_URL || polygonAmoy.rpcUrls.default.http[0]
+const isLocalRpc = rpc.includes('127.0.0.1') || rpc.includes('localhost')
+
+/** Same chain id as Polygon Amoy (80002), with the RPC this app actually uses. */
+export const appChain = defineChain({
+  id: 80002,
+  name: 'Polygon Amoy',
+  nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+  rpcUrls: {
+    default: { http: [rpc] },
+    public: { http: [rpc] },
+  },
+  blockExplorers: polygonAmoy.blockExplorers,
+})
 
 const walletConnectProjectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
 
-const connectors = [injected(), coinbaseWallet(), safe()]
-if (walletConnectProjectId) {
+const connectors = [injected({ shimDisconnect: true })]
+if (!isLocalRpc && walletConnectProjectId) {
   connectors.push(walletConnect({ projectId: walletConnectProjectId }))
 }
 
 export const wagmiConfig = createConfig({
-  chains: [polygonAmoy],
+  chains: [appChain],
   connectors,
   transports: {
-    [polygonAmoy.id]: http(import.meta.env.VITE_AMOY_RPC_URL || undefined),
+    [appChain.id]: http(rpc),
   },
   batch: { multicall: false },
 })
 
-export const AMOY_CHAIN_ID = polygonAmoy.id
+export const AMOY_CHAIN_ID = appChain.id
+export const AMOY_RPC_URL = rpc
+export const AMOY_ADD_CHAIN = {
+  chainName: isLocalRpc ? 'COLISEUM Local' : 'Polygon Amoy',
+  nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+  rpcUrls: [rpc],
+  blockExplorerUrls: isLocalRpc ? [] : ['https://amoy.polygonscan.com'],
+}

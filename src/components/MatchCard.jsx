@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom'
 import { Trophy, TrendingUp } from 'lucide-react'
-import { keccak256, encodeAbiParameters } from 'viem'
 import { useMarket } from '../lib/web3/hooks.js'
 import { useMemo } from 'react'
+import { matchQuestionId } from '../lib/web3/questionId.js'
 
 
 const STATE_LABEL = {
@@ -22,12 +22,7 @@ const STATE_STYLE = {
 export default function MatchCard({ set: s, onSelect, disabled, hasMarket: dbHasMarket }) {
   const questionId = useMemo(() => {
     if (!s.startgg_event_id || !s.startgg_set_id) return null
-    return keccak256(
-      encodeAbiParameters(
-        [{ type: 'uint256' }, { type: 'uint8' }, { type: 'uint256' }],
-        [BigInt(s.startgg_event_id), 0, BigInt(s.startgg_set_id)]
-      )
-    )
+    return matchQuestionId(s.startgg_event_id, s.startgg_set_id)
   }, [s.startgg_event_id, s.startgg_set_id])
 
   const { market } = useMarket(questionId)

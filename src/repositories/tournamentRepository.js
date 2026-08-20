@@ -299,7 +299,11 @@ export async function checkDuplicateMarketByQuestionId(questionId) {
     .eq('question_id', questionId)
     .in('state', ['PENDING', 'CHALLENGED', 'ACTIVE'])
 
-  if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  if (error) {
+    // Cache is a hint only — on-chain uniqueness is the real authority.
+    console.warn('[checkDuplicateMarketByQuestionId]', error.message)
+    return false
+  }
   return (count ?? 0) > 0
 }
 

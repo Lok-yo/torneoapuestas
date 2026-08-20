@@ -33,7 +33,7 @@ export default function MainLayout() {
       {navOpen && (
         <button
           type="button"
-          aria-label="Cerrar menú"
+          aria-label="Cerrar menú / Close menu"
           className="fixed inset-0 z-30 bg-black/60 md:hidden"
           onClick={() => setNavOpen(false)}
         />
