@@ -31,14 +31,16 @@ export default function OnchainWalletView() {
   const [notice, setNotice] = useState(null)
   const [now, setNow] = useState(Date.now())
 
-  const loadBets = () => {
+  const loadBets = async () => {
     if (!address) {
       setBets([])
       return
     }
-    fetchOnchainBets(address, accountId)
-      .then(setBets)
-      .catch(() => setBets([]))
+    try {
+      setBets(await fetchOnchainBets(address, accountId))
+    } catch {
+      setBets([])
+    }
   }
 
   useEffect(() => {
@@ -134,7 +136,7 @@ export default function OnchainWalletView() {
     try {
       await cancelBet(questionId)
       await refetch()
-      loadBets()
+      await loadBets()
       setNotice(t('wallet.cashOutDone'))
     } catch (err) {
       setActionError(translateError(err) || t('wallet.cashOutFail'))
@@ -235,8 +237,10 @@ export default function OnchainWalletView() {
         ) : (
           <ul className="flex flex-col border border-zinc-800">
             {bets.slice(0, 6).map((bet) => {
-              const canCash = (bet.cancelAmount ?? 0n) > 0n
-              const left = canCash ? formatCountdown(Math.max(0, bet.cancelDeadline - now)) : null
+              const leftMs = Math.max(0, (bet.cancelRemainingMs ?? 0) - (now - (bet.fetchedAt || now)))
+              const cancelled = Boolean(bet.cancelled)
+              const canCash = !cancelled && leftMs > 0
+              const left = formatCountdown(leftMs)
               return (
                 <li key={bet.txHash} className="border-b border-zinc-800 last:border-0">
                   <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -246,7 +250,11 @@ export default function OnchainWalletView() {
                         {t('wallet.betOn')} <span className="text-lime">{bet.pick ?? t('wallet.aPick')}</span>
                       </p>
                       <p className="mt-0.5 text-[11px] text-zinc-600">
-                        {canCash ? t('wallet.cashOutLeft', { time: left }) : t('wallet.cashOutLocked')}
+                        {cancelled
+                          ? t('wallet.cashOutReturned')
+                          : canCash
+                            ? t('wallet.cashOutLeft', { time: left })
+                            : t('wallet.cashOutLocked')}
                       </p>
                     </Link>
                     <div className="flex shrink-0 items-center gap-3">

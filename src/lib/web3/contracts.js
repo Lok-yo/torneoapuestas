@@ -379,6 +379,33 @@ export const HOUSE_BANK_ABI = [
   },
   {
     type: 'function',
+    name: 'userLockedPayout',
+    stateMutability: 'view',
+    inputs: [
+      { name: '', type: 'bytes32' },
+      { name: '', type: 'bytes32' },
+      { name: '', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'positionOf',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'questionId', type: 'bytes32' },
+      { name: 'wallet', type: 'address' },
+      { name: 'accountId', type: 'bytes32' },
+    ],
+    outputs: [
+      { name: 'stake0', type: 'uint256' },
+      { name: 'stake1', type: 'uint256' },
+      { name: 'payout0', type: 'uint256' },
+      { name: 'payout1', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
     name: 'pickOf',
     stateMutability: 'view',
     inputs: [

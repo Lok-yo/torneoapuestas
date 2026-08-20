@@ -7,7 +7,7 @@ import { useMarket, useHouseTrade, useHouseAccount, useWalletConnect, useBook } 
 import { useSession } from '../../auth/SessionProvider.jsx'
 import { MARKET_STATE } from '../../lib/web3/contracts.js'
 import { translateError } from '../../lib/web3/translateError.js'
-import { formatUsdc, parseUsdc, formatOdds, estimatedPayout, maxBetOnSide, minBetOnSide, OPENING_MAX, openPositionPayout } from '../../lib/web3/format.js'
+import { formatUsdc, parseUsdc, formatOdds, estimatedPayout, maxBetOnSide, minBetOnSide, OPENING_MAX, lockedPositionPayout } from '../../lib/web3/format.js'
 import { marketStateCopy } from '../../lib/web3/marketLabels.js'
 import BetPayoutLines from '../../components/BetPayoutLines.jsx'
 import { useI18n } from '../../i18n/I18nProvider.jsx'
@@ -21,7 +21,7 @@ export default function OnchainMarketDetailView() {
   const { address, isConnected, connectors, connect, isCorrectChain, switchToAmoy } = useWalletConnect()
   const { placeBet, isPending } = useHouseTrade()
   const { account } = useHouseAccount()
-  const { book, userSide, userStake0, userStake1, refetch: refetchBook } = useBook(questionId)
+  const { book, userSide, userStake0, userStake1, userPayout0, userPayout1, refetch: refetchBook } = useBook(questionId)
 
   const [outcomeIndex, setOutcomeIndex] = useState(0)
   const [investAmount, setInvestAmount] = useState('10')
@@ -134,8 +134,8 @@ export default function OnchainMarketDetailView() {
             const pct = pool > 0n ? Number((stake * 100n) / pool) : 50
             const locked = userSide !== 0 && userSide !== idx + 1
             const myStake = idx === 0 ? userStake0 : userStake1
-            const otherStake = idx === 0 ? book.stake1 : book.stake0
-            const live = openPositionPayout(myStake, stake, otherStake)
+            const myPayout = idx === 0 ? userPayout0 : userPayout1
+            const live = lockedPositionPayout(myStake, myPayout)
             return (
               <button
                 key={name}
@@ -229,7 +229,8 @@ export default function OnchainMarketDetailView() {
               const sideStake = outcomeIndex === 0 ? book.stake0 : book.stake1
               const otherStake = outcomeIndex === 0 ? book.stake1 : book.stake0
               const myOpen = outcomeIndex === 0 ? userStake0 : userStake1
-              const liveOpen = openPositionPayout(myOpen, sideStake, otherStake)
+              const myPay = outcomeIndex === 0 ? userPayout0 : userPayout1
+              const liveOpen = lockedPositionPayout(myOpen, myPay)
               const est = estimatedPayout(amount, sideStake, otherStake)
               const cap = maxBetOnSide(sideStake, otherStake)
               const floor = minBetOnSide(sideStake, otherStake)

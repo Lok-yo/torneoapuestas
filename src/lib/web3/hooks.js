@@ -10,9 +10,10 @@ import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContrac
 import { readContract, getAccount } from 'wagmi/actions'
 import { wagmiConfig, AMOY_CHAIN_ID, AMOY_ADD_CHAIN } from './client.js'
 import { sendWalletTx, sendMetaMaskCall } from './sendTx.js'
+import { lockCancelWindow } from './cancelWindow.js'
 import { isLocalAnvil, registerStartggEvent, createLocalMarket } from './localDev.js'
 import { useSession } from '../../auth/SessionProvider.jsx'
-import { sessionAccountId, housePlayerId } from './accountId.js'
+import { sessionAccountId } from './accountId.js'
 import {
   MARKET_FACTORY_ABI,
   MARKET_FACTORY_ADDRESS,
@@ -364,7 +365,6 @@ export function useWithdrawProfits() {
 export function useBook(questionId) {
   const { address } = useAccount()
   const accountId = useSessionAccountId()
-  const pid = housePlayerId(address, accountId)
   const { data, isLoading, refetch } = useReadContract({
     address: HOUSE_BANK_ADDRESS,
     abi: HOUSE_BANK_ABI,
@@ -379,19 +379,12 @@ export function useBook(questionId) {
     args: address && questionId && accountId ? [questionId, address, accountId] : undefined,
     query: { enabled: Boolean(address && questionId && accountId && isHouseConfigured), refetchInterval: 4000 },
   })
-  const { data: userStake0 } = useReadContract({
+  const { data: pos } = useReadContract({
     address: HOUSE_BANK_ADDRESS,
     abi: HOUSE_BANK_ABI,
-    functionName: 'userStake',
-    args: questionId && pid ? [questionId, pid, 0n] : undefined,
-    query: { enabled: Boolean(questionId && pid && isHouseConfigured), refetchInterval: 4000 },
-  })
-  const { data: userStake1 } = useReadContract({
-    address: HOUSE_BANK_ADDRESS,
-    abi: HOUSE_BANK_ABI,
-    functionName: 'userStake',
-    args: questionId && pid ? [questionId, pid, 1n] : undefined,
-    query: { enabled: Boolean(questionId && pid && isHouseConfigured), refetchInterval: 4000 },
+    functionName: 'positionOf',
+    args: address && questionId && accountId ? [questionId, address, accountId] : undefined,
+    query: { enabled: Boolean(address && questionId && accountId && isHouseConfigured), refetchInterval: 4000 },
   })
   const book = useMemo(() => {
     if (!data) {
@@ -410,11 +403,14 @@ export function useBook(questionId) {
       voided: Boolean(row[6]),
     }
   }, [data])
+  const posRow = Array.isArray(pos) ? pos : [pos?.stake0, pos?.stake1, pos?.payout0, pos?.payout1]
   return {
     book,
     userSide: Number(side ?? 0),
-    userStake0: userStake0 ?? 0n,
-    userStake1: userStake1 ?? 0n,
+    userStake0: posRow[0] ?? 0n,
+    userStake1: posRow[1] ?? 0n,
+    userPayout0: posRow[2] ?? 0n,
+    userPayout1: posRow[3] ?? 0n,
     isLoading,
     refetch,
   }
@@ -433,7 +429,7 @@ export function useHouseTrade() {
     if (!address) throw new Error('Conecta la wallet.')
     setLocalPending(true)
     try {
-      return await houseWrite(
+      const hash = await houseWrite(
         writeContractAsync,
         {
           address: HOUSE_BANK_ADDRESS,
@@ -443,6 +439,8 @@ export function useHouseTrade() {
         },
         { simulate: true },
       )
+      lockCancelWindow(hash)
+      return hash
     } finally {
       setLocalPending(false)
     }
@@ -451,14 +449,45 @@ export function useHouseTrade() {
   async function cancelBet(questionId) {
     if (!isHouseConfigured) throw new Error('La casa no está desplegada.')
     if (!accountId) throw new Error('Necesitas iniciar sesión con Google.')
+    const { address } = getAccount(wagmiConfig)
+    if (!address) throw new Error('Conecta la wallet.')
+    const windowRow = await readContract(wagmiConfig, {
+      address: HOUSE_BANK_ADDRESS,
+      abi: HOUSE_BANK_ABI,
+      functionName: 'cancelWindowOf',
+      args: [questionId, address, accountId],
+    })
+    const openAmount = Array.isArray(windowRow) ? windowRow[0] : windowRow.amount
+    if (!openAmount || openAmount === 0n) {
+      throw new Error('CancelWindowClosed')
+    }
+    const beforeRow = await readContract(wagmiConfig, {
+      address: HOUSE_BANK_ADDRESS,
+      abi: HOUSE_BANK_ABI,
+      functionName: 'accountOf',
+      args: [address, accountId],
+    })
+    const beforeInPlay = Array.isArray(beforeRow) ? beforeRow[2] : beforeRow.inPlay
     setLocalPending(true)
     try {
-      return await houseWrite(writeContractAsync, {
+      const hash = await houseWrite(writeContractAsync, {
         address: HOUSE_BANK_ADDRESS,
         abi: HOUSE_BANK_ABI,
         functionName: 'cancelBet',
         args: [questionId, accountId],
       })
+      for (let i = 0; i < 24; i++) {
+        const afterRow = await readContract(wagmiConfig, {
+          address: HOUSE_BANK_ADDRESS,
+          abi: HOUSE_BANK_ABI,
+          functionName: 'accountOf',
+          args: [address, accountId],
+        })
+        const inPlay = Array.isArray(afterRow) ? afterRow[2] : afterRow.inPlay
+        if (inPlay < beforeInPlay) return hash
+        await new Promise((r) => setTimeout(r, 250))
+      }
+      throw new Error('CancelWindowClosed')
     } finally {
       setLocalPending(false)
     }

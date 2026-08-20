@@ -56,6 +56,7 @@ export const es = {
     cashOutLeft: 'Te quedan {time} para cobrar esta apuesta.',
     cashOutLocked: 'Ya pasaron 10 minutos. Esta apuesta se queda en el partido.',
     cashOutDone: 'Retiraste la apuesta. El USDC volvió a tu saldo de la casa.',
+    cashOutReturned: 'Retirada — el USDC volvió al saldo de la casa.',
     depositKicker: 'Depósito',
     depositTitle: 'Agregar fondos',
     depositHint:

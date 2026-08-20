@@ -11,7 +11,7 @@
     "test": "vitest",
     "test:e2e": "playwright test",
     "test:db": "supabase test db",
-    "anvil": "anvil --chain-id 80002 --host 127.0.0.1 --port 8545",
+    "anvil": "anvil --chain-id 80002 --host 127.0.0.1 --port 8545 --block-time 1",
     "deploy:local": "forge script ./script/DeployLocal.s.sol --root ./contracts --rpc-url http://127.0.0.1:8545 --broadcast"
   },
   "dependencies": {

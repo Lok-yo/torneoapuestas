@@ -205,7 +205,7 @@ export async function sendMetaMaskCall(request, { gas = 2_000_000n, simulate = t
     await sleep(150)
     if (i === 4 || i === 12) await mineLocalBlock()
   }
-  return hash
+  throw new Error('No llegó el recibo de MetaMask. La transacción no se confirmó.')
 }
 
 /**

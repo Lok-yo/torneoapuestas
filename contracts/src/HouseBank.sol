@@ -22,7 +22,7 @@ contract HouseBank {
         bytes32 accountId;
         uint256 outcomeIndex;
         uint256 stake;
-        uint256 shares;
+        uint256 lockedPayout;
         uint256 placedAt;
     }
 
@@ -62,6 +62,7 @@ contract HouseBank {
     mapping(bytes32 => bool) public voided;
     mapping(bytes32 => uint256[2]) public sideStake;
     mapping(bytes32 => mapping(bytes32 => uint256[2])) public userStake;
+    mapping(bytes32 => mapping(bytes32 => uint256[2])) public userLockedPayout;
     mapping(bytes32 => mapping(bytes32 => uint8)) public userSide;
     uint256 public houseTake;
 
@@ -130,6 +131,40 @@ contract HouseBank {
 
     function pickOf(bytes32 questionId, address wallet, bytes32 accountId) external view returns (uint8) {
         return userSide[questionId][_pid(wallet, accountId)];
+    }
+
+    function positionOf(bytes32 questionId, address wallet, bytes32 accountId)
+        external
+        view
+        returns (uint256 stake0, uint256 stake1, uint256 payout0, uint256 payout1)
+    {
+        bytes32 id = _pid(wallet, accountId);
+        return (
+            userStake[questionId][id][0],
+            userStake[questionId][id][1],
+            userLockedPayout[questionId][id][0],
+            userLockedPayout[questionId][id][1]
+        );
+    }
+
+    function _quote(uint256 stake, uint256 sideTotal, uint256 otherTotal) internal pure returns (uint256) {
+        if (stake == 0 || sideTotal == 0 || otherTotal == 0) return 0;
+        uint256 pool = sideTotal + otherTotal;
+        uint256 net = pool - (pool * HOUSE_BPS) / 10_000;
+        return (stake * net) / sideTotal;
+    }
+
+    function _lockPending(bytes32 questionId, uint256 side) internal {
+        uint256 mine = sideStake[questionId][side];
+        uint256 them = sideStake[questionId][1 - side];
+        Bet[] storage bets = marketBets[questionId];
+        for (uint256 i = 0; i < bets.length; i++) {
+            if (bets[i].outcomeIndex != side || bets[i].stake == 0 || bets[i].lockedPayout != 0) continue;
+            uint256 payout = _quote(bets[i].stake, mine, them);
+            bets[i].lockedPayout = payout;
+            bytes32 id = _pid(bets[i].user, bets[i].accountId);
+            userLockedPayout[questionId][id][side] += payout;
+        }
     }
 
     function addFunds(uint256 amount, bytes32 accountId) external {
@@ -232,13 +267,23 @@ contract HouseBank {
         uint8 existing = userSide[questionId][id];
         if (existing != 0 && existing != uint8(outcomeIndex + 1)) revert AlreadyOnOtherSide();
 
+        uint256 other = 1 - outcomeIndex;
+        uint256 them = sideStake[questionId][other];
+
         balance[id] -= amount;
         inPlay[id] += amount;
         userSide[questionId][id] = uint8(outcomeIndex + 1);
         userStake[questionId][id][outcomeIndex] += amount;
         sideStake[questionId][outcomeIndex] += amount;
 
-        marketBets[questionId].push(Bet(msg.sender, accountId, outcomeIndex, amount, amount, block.timestamp));
+        uint256 payout;
+        if (them > 0) {
+            payout = _quote(amount, sideStake[questionId][outcomeIndex], them);
+            userLockedPayout[questionId][id][outcomeIndex] += payout;
+            _lockPending(questionId, other);
+        }
+
+        marketBets[questionId].push(Bet(msg.sender, accountId, outcomeIndex, amount, payout, block.timestamp));
         emit BetPlaced(msg.sender, questionId, accountId, outcomeIndex, amount);
     }
 
@@ -273,9 +318,16 @@ contract HouseBank {
             if (block.timestamp > bets[i].placedAt + CANCEL_WINDOW) continue;
             uint256 stake = bets[i].stake;
             uint256 outcome = bets[i].outcomeIndex;
+            uint256 locked = bets[i].lockedPayout;
             bets[i].stake = 0;
+            bets[i].lockedPayout = 0;
             sideStake[questionId][outcome] -= stake;
             userStake[questionId][id][outcome] -= stake;
+            if (locked > 0 && userLockedPayout[questionId][id][outcome] >= locked) {
+                userLockedPayout[questionId][id][outcome] -= locked;
+            } else {
+                userLockedPayout[questionId][id][outcome] = 0;
+            }
             inPlay[id] -= stake;
             balance[id] += stake;
             refunded += stake;
@@ -317,23 +369,28 @@ contract HouseBank {
         }
 
         uint256 pool = s0 + s1;
-        uint256 cut = (pool * HOUSE_BPS) / 10_000;
-        uint256 net = pool - cut;
-        houseTake += cut;
-        uint256 winPool = sideStake[questionId][winningIndex];
-
+        uint256 paid;
         for (uint256 i = 0; i < bets.length; i++) {
             if (bets[i].stake == 0) continue;
             bytes32 id = _pid(bets[i].user, bets[i].accountId);
             inPlay[id] -= bets[i].stake;
-            if (bets[i].outcomeIndex != winningIndex || winPool == 0) continue;
-            uint256 payout = (bets[i].stake * net) / winPool;
+            if (bets[i].outcomeIndex != winningIndex) continue;
+            uint256 payout = bets[i].lockedPayout;
+            if (payout == 0) {
+                payout = _quote(bets[i].stake, sideStake[questionId][winningIndex], sideStake[questionId][1 - winningIndex]);
+            }
             if (payout == 0) continue;
             balance[id] += payout;
+            paid += payout;
             emit WinningsCredited(bets[i].user, questionId, payout);
         }
+        if (paid > pool) {
+            IMintableERC20(address(usdc)).mint(address(this), paid - pool);
+        } else {
+            houseTake += pool - paid;
+        }
 
-        emit MarketClaimed(questionId, net);
+        emit MarketClaimed(questionId, paid);
     }
 
     function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {

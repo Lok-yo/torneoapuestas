@@ -3,11 +3,11 @@ import { Link, useLocation } from 'react-router-dom'
 import { createPublicClient, http } from 'viem'
 import { polygonAmoy } from 'viem/chains'
 import { useSession } from '../auth/SessionProvider.jsx'
-import { sessionAccountId, housePlayerId } from '../lib/web3/accountId.js'
+import { sessionAccountId } from '../lib/web3/accountId.js'
 import { useWalletConnect, useHouseTrade, useHouseAccount } from '../lib/web3/hooks.js'
 import { MARKET_FACTORY_ABI, MARKET_FACTORY_ADDRESS, MARKET_STATE, HOUSE_BANK_ABI, HOUSE_BANK_ADDRESS } from '../lib/web3/contracts.js'
 import { matchQuestionId } from '../lib/web3/questionId.js'
-import { parseUsdc, formatUsdc, formatOdds, estimatedPayout, maxBetOnSide, minBetOnSide, OPENING_MAX, openPositionPayout } from '../lib/web3/format.js'
+import { parseUsdc, formatUsdc, formatOdds, estimatedPayout, maxBetOnSide, minBetOnSide, OPENING_MAX, lockedPositionPayout } from '../lib/web3/format.js'
 import { translateError } from '../lib/web3/translateError.js'
 import { marketStateCopy } from '../lib/web3/marketLabels.js'
 import { roundLabel } from '../lib/bets.js'
@@ -62,6 +62,8 @@ export default function TournamentPredictionWidget({ tournamentId, sets = [], st
           let userSide = 0
           let userStake0 = 0n
           let userStake1 = 0n
+          let userPayout0 = 0n
+          let userPayout1 = 0n
           if (HOUSE_BANK_ADDRESS && state === MARKET_STATE.ACTIVE) {
             try {
               book = await client.readContract({
@@ -79,31 +81,23 @@ export default function TournamentPredictionWidget({ tournamentId, sets = [], st
                     args: [questionId, address, accountId],
                   }),
                 )
-                const pid = housePlayerId(address, accountId)
-                if (pid) {
-                  const [s0, s1] = await Promise.all([
-                    client.readContract({
-                      address: HOUSE_BANK_ADDRESS,
-                      abi: HOUSE_BANK_ABI,
-                      functionName: 'userStake',
-                      args: [questionId, pid, 0n],
-                    }),
-                    client.readContract({
-                      address: HOUSE_BANK_ADDRESS,
-                      abi: HOUSE_BANK_ABI,
-                      functionName: 'userStake',
-                      args: [questionId, pid, 1n],
-                    }),
-                  ])
-                  userStake0 = s0 ?? 0n
-                  userStake1 = s1 ?? 0n
-                }
+                const row = await client.readContract({
+                  address: HOUSE_BANK_ADDRESS,
+                  abi: HOUSE_BANK_ABI,
+                  functionName: 'positionOf',
+                  args: [questionId, address, accountId],
+                })
+                const pos = Array.isArray(row) ? row : [row.stake0, row.stake1, row.payout0, row.payout1]
+                userStake0 = pos[0] ?? 0n
+                userStake1 = pos[1] ?? 0n
+                userPayout0 = pos[2] ?? 0n
+                userPayout1 = pos[3] ?? 0n
               }
             } catch {
               book = null
             }
           }
-          next[s.startgg_set_id] = { questionId, state, book, userSide, userStake0, userStake1 }
+          next[s.startgg_set_id] = { questionId, state, book, userSide, userStake0, userStake1, userPayout0, userPayout1 }
         } catch {
           next[s.startgg_set_id] = { questionId, state: 0 }
         }
@@ -292,7 +286,8 @@ export default function TournamentPredictionWidget({ tournamentId, sets = [], st
                     const locked = Boolean(info?.userSide) && info.userSide !== idx + 1
                     const mine = info?.userSide === idx + 1
                     const myStake = idx === 0 ? info?.userStake0 ?? 0n : info?.userStake1 ?? 0n
-                    const live = openPositionPayout(myStake, sideStake, otherStake)
+                    const myPayout = idx === 0 ? info?.userPayout0 ?? 0n : info?.userPayout1 ?? 0n
+                    const live = lockedPositionPayout(myStake, myPayout)
                     return (
                       <div key={`${line.startgg_set_id}-${idx}`} className={`flex flex-col gap-3 p-4 ${idx === 0 ? 'sm:border-r sm:border-zinc-800' : ''}`}>
                         <p className="text-[15px] font-semibold text-white">{name}</p>

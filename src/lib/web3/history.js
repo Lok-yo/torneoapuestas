@@ -2,6 +2,8 @@ import { createPublicClient, http, parseAbiItem } from 'viem'
 import { polygonAmoy } from 'viem/chains'
 import { HOUSE_BANK_ADDRESS, HOUSE_BANK_ABI, isHouseConfigured } from './contracts.js'
 import { fetchSetCatalog, pickName, resolveQuestion } from './marketLabels.js'
+import { remainingCancelMs, CANCEL_MS, expireCancelWindow } from './cancelWindow.js'
+import { housePlayerId } from './accountId.js'
 
 const BET_PLACED = parseAbiItem(
   'event BetPlaced(address indexed user, bytes32 indexed questionId, bytes32 indexed accountId, uint256 outcomeIndex, uint256 amount)',
@@ -33,8 +35,11 @@ export async function fetchOnchainBets(address, accountId) {
   })
   const catalog = await fetchSetCatalog()
   let latest = 0n
+  let chainNowSec = 0
   try {
-    latest = await client.getBlockNumber()
+    const latestBlock = await client.getBlock({ blockTag: 'latest' })
+    latest = latestBlock.number
+    chainNowSec = Number(latestBlock.timestamp)
   } catch {
     return []
   }
@@ -74,33 +79,55 @@ export async function fetchOnchainBets(address, accountId) {
     }),
   )
 
-  const windows = {}
-  const uniqueQ = [...new Set(fromHouse.map((b) => b.questionId))]
-  await Promise.all(
-    uniqueQ.map(async (questionId) => {
-      try {
-        const row = await client.readContract({
-          address: HOUSE_BANK_ADDRESS,
-          abi: HOUSE_BANK_ABI,
-          functionName: 'cancelWindowOf',
-          args: [questionId, address, accountId],
-        })
-        windows[questionId] = {
-          amount: Array.isArray(row) ? row[0] : row.amount,
-          deadline: Number(Array.isArray(row) ? row[1] : row.deadline) * 1000,
+  const pid = housePlayerId(address, accountId)
+  const openStake = {}
+  if (pid && isHouseConfigured) {
+    const uniqueQ = [...new Set(fromHouse.map((b) => b.questionId))]
+    await Promise.all(
+      uniqueQ.map(async (questionId) => {
+        try {
+          const [s0, s1] = await Promise.all([
+            client.readContract({
+              address: HOUSE_BANK_ADDRESS,
+              abi: HOUSE_BANK_ABI,
+              functionName: 'userStake',
+              args: [questionId, pid, 0n],
+            }),
+            client.readContract({
+              address: HOUSE_BANK_ADDRESS,
+              abi: HOUSE_BANK_ABI,
+              functionName: 'userStake',
+              args: [questionId, pid, 1n],
+            }),
+          ])
+          openStake[questionId] = (s0 ?? 0n) + (s1 ?? 0n)
+        } catch {
+          openStake[questionId] = null
         }
-      } catch {
-        windows[questionId] = { amount: 0n, deadline: 0 }
-      }
-    }),
-  )
+      }),
+    )
+  }
 
+  const fetchedAt = Date.now()
   return fromHouse
-    .map((bet) => ({
-      ...bet,
-      placedAt: times[bet.blockNumber.toString()] || 0,
-      cancelAmount: windows[bet.questionId]?.amount ?? 0n,
-      cancelDeadline: windows[bet.questionId]?.deadline ?? 0,
-    }))
+    .map((bet) => {
+      const placedAt = times[bet.blockNumber.toString()] || 0
+      const placedAtSec = placedAt > 0 ? placedAt / 1000 : 0
+      const cancelled = openStake[bet.questionId] === 0n
+      if (cancelled) expireCancelWindow(bet.txHash)
+      const chainLeft = cancelled || !placedAtSec
+        ? 0
+        : Math.max(0, (placedAtSec + CANCEL_MS / 1000 - chainNowSec) * 1000)
+      const remaining = cancelled ? 0 : remainingCancelMs(bet.txHash, chainLeft)
+      return {
+        ...bet,
+        placedAt,
+        cancelled,
+        cancelAmount: remaining > 0 ? bet.investmentAmount : 0n,
+        cancelDeadline: fetchedAt + remaining,
+        cancelRemainingMs: remaining,
+        fetchedAt,
+      }
+    })
     .sort((a, b) => Number(b.blockNumber - a.blockNumber))
 }

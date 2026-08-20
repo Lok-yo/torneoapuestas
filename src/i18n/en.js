@@ -56,6 +56,7 @@ export const en = {
     cashOutLeft: '{time} left to cash out this bet.',
     cashOutLocked: '10 minutes passed. This bet stays on the match.',
     cashOutDone: 'You took the bet back. USDC returned to your house balance.',
+    cashOutReturned: 'Cashed out — USDC returned to your house balance.',
     depositKicker: 'Deposit',
     depositTitle: 'Add funds',
     depositHint:

@@ -239,4 +239,30 @@ contract HouseBankTest is Fixtures {
         vm.prank(player);
         house.placeBet(questionId, more, 0, acc);
     }
+
+    function test_later_bets_do_not_change_locked_payout() public {
+        (bytes32 questionId,) = _createActiveMarket("lock-odds");
+        vm.prank(player);
+        house.addFunds(200e6, acc);
+        vm.prank(playerB);
+        house.addFunds(200e6, accB);
+
+        vm.prank(player);
+        house.placeBet(questionId, 50e6, 0, acc);
+        (,, uint256 pending0,) = house.positionOf(questionId, player, acc);
+        assertEq(pending0, 0);
+
+        vm.prank(playerB);
+        house.placeBet(questionId, 50e6, 1, accB);
+
+        (uint256 s0,, uint256 locked0,) = house.positionOf(questionId, player, acc);
+        assertEq(s0, 50e6);
+        assertEq(locked0, 95e6);
+
+        vm.prank(playerB);
+        house.placeBet(questionId, 20e6, 1, accB);
+
+        (,, uint256 stillLocked,) = house.positionOf(questionId, player, acc);
+        assertEq(stillLocked, 95e6);
+    }
 }

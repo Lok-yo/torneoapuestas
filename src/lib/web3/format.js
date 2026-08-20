@@ -93,17 +93,13 @@ export function estimatedPayout(stake, sideStake, otherStake) {
   return { payout, profit: payout - add, refund: false, odds, overLimit, underLimit }
 }
 
-/** Payout of a stake already in the book (not a new bet). */
-export function openPositionPayout(userStake, sideStake, otherStake) {
+/** Existing bet: locked payout from the contract, never the live book. */
+export function lockedPositionPayout(userStake, lockedPayout) {
   const mine = asUsdc(userStake)
-  const side = asUsdc(sideStake)
-  const them = asUsdc(otherStake)
+  const pay = asUsdc(lockedPayout)
   if (mine <= 0n) return { payout: 0n, profit: 0n, pending: true, empty: true }
-  if (them === 0n || side === 0n) return { payout: 0n, profit: 0n, pending: true, empty: false }
-  const pool = side + them
-  const net = pool - (pool * HOUSE_BPS) / 10_000n
-  const payout = (mine * net) / side
-  return { payout, profit: payout - mine, pending: false, empty: false }
+  if (pay === 0n) return { payout: 0n, profit: 0n, pending: true, empty: false }
+  return { payout: pay, profit: pay - mine, pending: false, empty: false }
 }
 
 /** Parses a human "12.34" USDC string into a 6-decimal bigint. */
