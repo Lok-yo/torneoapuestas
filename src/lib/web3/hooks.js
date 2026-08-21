@@ -57,7 +57,8 @@ export function useWalletConnect() {
     chainId: chain?.id,
     isCorrectChain: chain?.id === AMOY_CHAIN_ID,
     connectors: wallets,
-    connect: (connector) => connect({ connector: connector ?? wallets[0] }),
+    connect: (connector) =>
+      connect({ connector: connector ?? wallets[0], chainId: AMOY_CHAIN_ID }),
     disconnect,
     switchToAmoy: () =>
       switchChain({
