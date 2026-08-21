@@ -41,7 +41,9 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
     ? Math.floor(new Date(s.event_starts_at).getTime() / 1000)
     : Math.floor(Date.now() / 1000) + 3600
 
-  const isFormInvalid = Number(seedLiquidity) < 1
+  // Matches MIN_LIQUIDITY_USDC (100) and the input's min="100" — a
+  // seed below 100 USDC can never pass handleSubmit, so block it in the UI.
+  const isFormInvalid = Number(seedLiquidity) < 100
 
   if (!MARKET_FACTORY_ADDRESS) {
     return (
