@@ -4,8 +4,8 @@
 // itself may ever hold it. See tasks.md 2.3/10.1 and design.md "signer
 // key held only in Supabase secrets".
 
-import { assert, assertEquals, assertFalse } from 'jsr:@std/assert@1'
-import { buildPostResultBundle, createRelayerAccount, redactSecrets } from './signer.ts'
+import { assert, assertEquals, assertFalse, assertNotEquals } from 'jsr:@std/assert@1'
+import { buildPostResultBundle, buildResultRef, createRelayerAccount, redactSecrets } from './signer.ts'
 
 // Well-known Anvil/Foundry default test account #0 private key — public
 // test fixture, never a real secret. Used only to prove the redaction
@@ -55,4 +55,20 @@ Deno.test('redactSecrets: no-op when the secret env var is unset (nothing to lea
   const fakeEnv = (_key: string) => undefined
   const input = 'no secrets here'
   assertEquals(redactSecrets(input, fakeEnv), input)
+})
+
+// RED (Phase 2, task 2.4): buildResultRef doesn't exist yet — the
+// relayer must derive resultRef from startgg_set_id (settlement-mapping's
+// resultRefPreimage), never the legacy results.id UUID. See spec
+// "resultRef Derivation".
+Deno.test('buildResultRef: deterministic bytes32 hash per startgg_set_id', () => {
+  const a = buildResultRef(4242)
+  const again = buildResultRef(4242)
+
+  assertEquals(a, again)
+  assert(/^0x[0-9a-f]{64}$/.test(a), 'resultRef must be a bytes32 hex hash')
+})
+
+Deno.test('buildResultRef: different set ids produce different hashes', () => {
+  assertNotEquals(buildResultRef(1), buildResultRef(2))
 })

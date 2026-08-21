@@ -1,17 +1,22 @@
 // relayer: signs and posts start.gg-sourced results on-chain via
-// ResolutionAdapter.postResult(). Derives its result from the existing
-// `results`/`matches` tables (never a fresh start.gg call — the poller is
-// the only ingestion path), and reads its signing key ONLY from Supabase
-// secrets (`Deno.env.get('RELAYER_PRIVATE_KEY')`), never from the request
-// body, a client header, or any persisted table. The key never appears in
-// the bundle, logs, or HTTP response — see signer.ts (unit-tested
-// separately, relayer.secret.test.ts / tasks.md 2.3/10.1).
+// ResolutionAdapter.postResult(). Derives its result from
+// `public.tournament_sets` (bracket sets ingested by startgg-poller —
+// never a fresh start.gg call, never the legacy `results`/`matches`
+// tables, which have no rows for bracket sets), and reads its signing
+// key ONLY from Supabase secrets (`Deno.env.get('RELAYER_PRIVATE_KEY')`),
+// never from the request body, a client header, or any persisted table.
+// The key never appears in the bundle, logs, or HTTP response — see
+// signer.ts (unit-tested separately, relayer.secret.test.ts /
+// tasks.md 2.3/2.4/10.1). Note: this cloud path cannot reach a local
+// Anvil node — today's demo settlement path is the local loop
+// (scripts/settlement-loop.mjs), see design.md "Local Execution Mode".
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { createPublicClient, createWalletClient, http } from 'https://esm.sh/viem@2?bundle'
 import { polygonAmoy } from 'https://esm.sh/viem@2/chains?bundle'
 import { log, newRequestId } from '../_shared/log.js'
-import { buildPostResultBundle, createRelayerAccount, redactSecrets } from './signer.ts'
+import { deriveWinningIndex } from '../_shared/settlement-mapping.js'
+import { buildPostResultBundle, buildResultRef, createRelayerAccount, redactSecrets } from './signer.ts'
 
 Deno.serve(async (req) => {
   const requestId = newRequestId()
@@ -43,46 +48,75 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'FORBIDDEN' }), { status: 403 })
   }
 
-  let body: { questionId?: string; matchId?: string; winningIndex?: number }
+  let body: { setId?: number | string }
   try {
     body = await req.json()
   } catch {
     return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'Request body must be valid JSON.' }), { status: 400 })
   }
 
-  const { questionId, matchId, winningIndex } = body
-  if (!questionId || matchId === undefined || winningIndex === undefined) {
+  const { setId } = body
+  if (setId === undefined || setId === null || setId === '') {
     return new Response(
-      JSON.stringify({ error: 'VALIDATION_ERROR', message: 'questionId, matchId, and winningIndex are required.' }),
+      JSON.stringify({ error: 'VALIDATION_ERROR', message: 'setId is required.' }),
       { status: 400 },
     )
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
 
-  // Derive the posted result strictly from the ingested results/matches
-  // record — this function never accepts an arbitrary outcome from the
-  // caller's own claim.
-  const { data: result, error: resultError } = await supabase
-    .from('results')
-    .select('id, winner_membership_id, match_id')
-    .eq('match_id', matchId)
-    .eq('status', 'OFFICIAL')
+  // Derive the posted result strictly from the ingested tournament_sets
+  // record — this function never accepts an arbitrary outcome (or
+  // questionId/winningIndex) from the caller's own claim.
+  const { data: set, error: setError } = await supabase
+    .from('tournament_sets')
+    .select('startgg_set_id, state, entrant_a_startgg_id, entrant_b_startgg_id, winner_startgg_id')
+    .eq('startgg_set_id', setId)
     .maybeSingle()
 
-  if (resultError || !result) {
-    safeLog('warn', { event: 'relayer.no_ingested_result', matchId })
-    return new Response(JSON.stringify({ error: 'NOT_FOUND', message: 'No OFFICIAL result found for this match.' }), { status: 404 })
+  if (setError || !set || set.state !== 'COMPLETED') {
+    safeLog('warn', { event: 'relayer.set_not_completed', setId })
+    return new Response(
+      JSON.stringify({ error: 'NOT_FOUND', message: 'No COMPLETED tournament_sets row found for this set.' }),
+      { status: 404 },
+    )
+  }
+
+  const winningIndex = deriveWinningIndex(set)
+  if (winningIndex === null) {
+    safeLog('error', { event: 'relayer.winner_mismatch', setId })
+    return new Response(
+      JSON.stringify({ error: 'UNPROCESSABLE', message: 'winner_startgg_id does not match either entrant.' }),
+      { status: 422 },
+    )
+  }
+
+  const { data: market, error: marketError } = await supabase
+    .from('onchain_markets')
+    .select('question_id')
+    .eq('startgg_set_id', setId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (marketError || !market) {
+    safeLog('warn', { event: 'relayer.no_market', setId })
+    return new Response(
+      JSON.stringify({ error: 'NOT_FOUND', message: 'No on-chain market registered for this set.' }),
+      { status: 404 },
+    )
   }
 
   // Key is captured only in this closure and passed straight into viem's
   // wallet client — never assigned to a variable that outlives this
   // request or gets logged.
   const account = createRelayerAccount(relayerPrivateKey)
+  const resultRef = buildResultRef(set.startgg_set_id)
+  const questionId = market.question_id
 
-  const bundle = buildPostResultBundle(resolutionAdapterAddress, account.address, questionId, winningIndex, result.id)
+  const bundle = buildPostResultBundle(resolutionAdapterAddress, account.address, questionId, winningIndex, resultRef)
 
-  safeLog('info', { event: 'relayer.posting_result', questionId, matchId, winningIndex, resultRef: result.id })
+  safeLog('info', { event: 'relayer.posting_result', setId, questionId, winningIndex, resultRef })
 
   try {
     const walletClient = createWalletClient({ account: account as unknown as never, chain: polygonAmoy, transport: http(rpcUrl) })

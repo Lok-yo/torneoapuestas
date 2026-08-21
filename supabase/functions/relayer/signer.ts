@@ -7,7 +7,8 @@
 // "signer key held only in Supabase secrets".
 
 import { privateKeyToAccount } from 'https://esm.sh/viem@2/accounts?bundle'
-import { encodeFunctionData } from 'https://esm.sh/viem@2?bundle'
+import { encodeFunctionData, keccak256, toBytes } from 'https://esm.sh/viem@2?bundle'
+import { resultRefPreimage } from '../_shared/settlement-mapping.js'
 
 const POST_RESULT_ABI = [
   {
@@ -73,6 +74,16 @@ export function buildPostResultBundle(
     questionId,
     winningIndex,
   }
+}
+
+/** Deterministically derives the on-chain resultRef (bytes32) for a
+ * tournament_sets row's startgg_set_id. Reuses resultRefPreimage from
+ * settlement-mapping.js — the SAME preimage the local settlement loop
+ * hashes (scripts/settlement/tick.mjs) — so both paths always agree on
+ * resultRef for a given set. See spec "resultRef Derivation" and
+ * design.md "Data Flow". */
+export function buildResultRef(startggSetId: string | number): string {
+  return keccak256(toBytes(resultRefPreimage(startggSetId)))
 }
 
 /** Fields explicitly denylisted from every relayer log line / HTTP
