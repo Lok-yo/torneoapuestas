@@ -36,7 +36,7 @@ export default function MatchCard({ set: s, onSelect, disabled, hasMarket: dbHas
   const aWins = isCompleted && winnerId && s.entrant_a_startgg_id && winnerId === s.entrant_a_startgg_id
   const bWins = isCompleted && winnerId && s.entrant_b_startgg_id && winnerId === s.entrant_b_startgg_id
   const isPending = s.state === 'PENDING' || s.state === 'IN_PROGRESS'
-  const canBet = !!s.entrant_a_name && !!s.entrant_b_name && isPending && !hasMarket && !disabled
+  const canBet = !!s.entrant_a_name && !!s.entrant_b_name && s.entrant_a_name !== "Por definir" && s.entrant_b_name !== "Por definir" && isPending && !hasMarket && !disabled
 
   return (
     <div className="border border-zinc-800 bg-zinc-900/50 transition-colors duration-150">

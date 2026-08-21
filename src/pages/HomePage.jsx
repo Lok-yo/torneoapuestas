@@ -121,7 +121,7 @@ export default function HomePage() {
 
       <section className="panel">
         <div className="flex items-center justify-between border-b border-zinc-800/60 px-4 py-3">
-          <h2 className="font-display text-3xl uppercase text-white">Cartelera</h2>
+          <h2 className="font-display text-3xl uppercase text-white">Torneos en vivo</h2>
           <Link to="/torneos" className="text-[11px] font-bold uppercase tracking-wider text-lime">
             Ver todos
           </Link>

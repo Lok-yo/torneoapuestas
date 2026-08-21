@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, AlertCircle, AlertTriangle, ExternalLink } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useWalletConnect, useCreateMarket, useHouseAccount } from '../lib/web3/hooks.js'
@@ -22,6 +22,10 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
 
   const [seedLiquidity, setSeedLiquidity] = useState('100')
   const [error, setError] = useState(null)
+  const dialogRef = useRef(null)
+  useEffect(() => {
+    if (dialogRef.current) dialogRef.current.focus()
+  }, [])
 
   useEffect(() => {
     function onKey(e) {
@@ -115,7 +119,15 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-labelledby="market-modal-title-main" onClick={(e) => e.stopPropagation()} className="flex w-full max-w-lg flex-col gap-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="market-modal-title-main"
+        onClick={(e) => e.stopPropagation()}
+        className="flex w-full max-w-lg flex-col gap-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 focus:outline-none"
+      >
         <div className="flex items-center justify-between">
           <h2 id="market-modal-title-main" className="text-lg font-semibold text-zinc-50">
             Crear mercado — {s.entrant_a_name ?? '?'} vs {s.entrant_b_name ?? '?'}
@@ -139,7 +151,7 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
             <input
               id="modal-seed-liquidity"
               type="number"
-              min="1"
+              min="100"
               step="0.01"
               value={seedLiquidity}
               onChange={(e) => {
@@ -151,14 +163,14 @@ export default function CreateMarketModal({ set: s, startggEventId: propEventId,
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') {
                   const n = Number(seedLiquidity)
-                  if (!isNaN(n) && n <= 1) e.preventDefault()
+                  if (!isNaN(n) && n <= 100) e.preventDefault()
                 }
               }}
               disabled={isPending}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500 disabled:opacity-50"
             />
-            {Number(seedLiquidity) < 1 && seedLiquidity !== "" && (
-              <p className="mt-1 text-xs text-rose-400">Mínimo 1 USDC</p>
+            {Number(seedLiquidity) < 100 && seedLiquidity !== "" && (
+              <p className="mt-1 text-xs text-rose-400">Mínimo 100 USDC</p>
             )}
           </div>
 

@@ -11,7 +11,12 @@ describe('derivePhase', () => {
     expect(result).toEqual({ step: 4, label: PHASE_LABEL[4] })
   })
 
-  it('returns step 3 when IN_PROGRESS and some sets are COMPLETED', () => {
+  it('returns step 4 when sets exist and all are COMPLETED', () => {
+    const sets = [{ state: 'COMPLETED' }, { state: 'COMPLETED' }]
+    expect(derivePhase('IN_PROGRESS', sets)).toEqual({ step: 4, label: PHASE_LABEL[4] })
+  })
+
+  it('returns step 3 when sets exist and not all are COMPLETED', () => {
     const sets = [
       { state: 'COMPLETED' },
       { state: 'PENDING' },
@@ -19,18 +24,18 @@ describe('derivePhase', () => {
     expect(derivePhase('IN_PROGRESS', sets)).toEqual({ step: 3, label: PHASE_LABEL[3] })
   })
 
-  it('returns step 2 for IN_PROGRESS with no COMPLETED sets', () => {
+  it('returns step 2 for IN_PROGRESS with no sets', () => {
     expect(derivePhase('IN_PROGRESS', [])).toEqual({ step: 2, label: PHASE_LABEL[2] })
   })
 
-  it('returns step 2 for IN_PROGRESS with only PENDING sets', () => {
+  it('returns step 3 for IN_PROGRESS with only PENDING sets (since sets exist)', () => {
     const sets = [{ state: 'PENDING' }, { state: 'PENDING' }]
-    expect(derivePhase('IN_PROGRESS', sets)).toEqual({ step: 2, label: PHASE_LABEL[2] })
+    expect(derivePhase('IN_PROGRESS', sets)).toEqual({ step: 3, label: PHASE_LABEL[3] })
   })
 
-  it('returns step 2 for IN_PROGRESS with IN_PROGRESS sets', () => {
+  it('returns step 3 for IN_PROGRESS with IN_PROGRESS sets (since sets exist)', () => {
     const sets = [{ state: 'IN_PROGRESS' }]
-    expect(derivePhase('IN_PROGRESS', sets)).toEqual({ step: 2, label: PHASE_LABEL[2] })
+    expect(derivePhase('IN_PROGRESS', sets)).toEqual({ step: 3, label: PHASE_LABEL[3] })
   })
 
   it('returns step 2 for REGISTRATION_CLOSED', () => {

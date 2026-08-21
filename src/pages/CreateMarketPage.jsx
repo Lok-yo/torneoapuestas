@@ -104,10 +104,11 @@ export default function CreateMarketPage() {
         (s) =>
           s.entrant_a_name &&
           s.entrant_b_name &&
-          (s.state === 'PENDING' || s.state === 'IN_PROGRESS') &&
-          !s.has_market,
+          s.entrant_a_name !== 'Por definir' &&
+          s.entrant_b_name !== 'Por definir' &&
+          (s.state === 'PENDING' || s.state === 'IN_PROGRESS')
       ),
-    [sets],
+    [sets]
   )
 
   // Derive outcomeRef from selection
@@ -268,29 +269,37 @@ export default function CreateMarketPage() {
               <div className="flex flex-col gap-2">
                 {availableSets.map((s) => {
                   const isSelected = selectedSet?.startgg_set_id === s.startgg_set_id
+                  const isAlreadyMarket = s.has_market
                   return (
                     <button
                       key={s.startgg_set_id}
                       type="button"
                       onClick={() => { setSelectedSet(s); setError(null) }}
-                      disabled={isPending}
+                      disabled={isPending || isAlreadyMarket}
                       className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ${
                         isSelected
                           ? 'border-violet-500 bg-violet-500/10 text-zinc-100'
+                          : isAlreadyMarket
+                          ? 'border-zinc-800 bg-zinc-950/50 text-zinc-600 cursor-not-allowed opacity-60'
                           : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700'
                       }`}
                     >
                       <div className="flex flex-col">
-                        <span className="text-sm font-medium">
+                        <span className={`text-sm font-medium ${isAlreadyMarket ? 'text-zinc-600' : ''}`}>
                           {s.entrant_a_name} vs {s.entrant_b_name}
                         </span>
                         <span className="text-xs text-zinc-500">
                           {ROUND_LABEL[s.round] ?? `Ronda ${s.round}`} · Slot {s.slot + 1}
                         </span>
                       </div>
-                      {isSelected && (
+                      {isSelected && !isAlreadyMarket && (
                         <span className="rounded-full bg-violet-500 px-2 py-0.5 text-[10px] font-bold text-white">
                           Seleccionado
+                        </span>
+                      )}
+                      {isAlreadyMarket && (
+                        <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-bold text-zinc-400">
+                          Mercado activo
                         </span>
                       )}
                     </button>
@@ -306,17 +315,17 @@ export default function CreateMarketPage() {
           <div>
             <label className="mb-2 block text-xs font-medium text-zinc-400">
               <Trophy size={12} className="mr-1 inline" />
-              ¿Quién creés que gana? Seleccioná un jugador
+              Elegí un jugador para crear su mercado
             </label>
             <p className="mb-3 text-[11px] text-zinc-500">
-              Se creará un mercado "¿Ganará [Jugador] el torneo?" con apuestas Sí/No.
+              Cada jugador genera un mercado independiente. Si elegís a un jugador, crearás el mercado de tipo: <strong>"¿Ganará el torneo?" (Sí/No)</strong>.
             </p>
             {entrants.length === 0 ? (
               <p className="py-4 text-center text-sm text-zinc-500">
                 No hay jugadores conocidos todavía.
               </p>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-2">
                 {entrants.map((name) => {
                   const isSelected = selectedEntrant === name
                   return (
@@ -325,13 +334,25 @@ export default function CreateMarketPage() {
                       type="button"
                       onClick={() => { setSelectedEntrant(name); setError(null) }}
                       disabled={isPending}
-                      className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
+                      className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ${
                         isSelected
-                          ? 'border-violet-500 bg-violet-500/10 text-violet-300'
-                          : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700 hover:text-zinc-100'
+                          ? 'border-violet-500 bg-violet-500/10 text-zinc-100'
+                          : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700'
                       }`}
                     >
-                      {name}
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{name}</span>
+                        <span className="text-[11px] text-zinc-500">¿Ganará el torneo?</span>
+                      </div>
+                      {isSelected ? (
+                        <span className="rounded-full bg-violet-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                          Seleccionado
+                        </span>
+                      ) : (
+                        <span className="rounded bg-zinc-800 px-2 py-1 text-[10px] font-bold text-zinc-300">
+                          Crear mercado Sí/No
+                        </span>
+                      )}
                     </button>
                   )
                 })}

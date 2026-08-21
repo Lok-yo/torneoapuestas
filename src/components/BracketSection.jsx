@@ -1,16 +1,6 @@
 import { Clock, GitBranch } from 'lucide-react'
 import MatchCard from './MatchCard.jsx'
 
-const ROUND_LABEL = {
-  1: 'Grand Finals',
-  2: 'Winners Finals',
-  3: 'Losers Finals',
-  4: 'Winners Semis',
-  5: 'Losers Semis',
-  6: 'Round of 8',
-  7: 'Quarterfinals',
-}
-
 export default function BracketSection({ tournamentId, sets, onSelectSet, disabled }) {
   if (!sets || sets.length === 0) {
     return (
@@ -21,7 +11,27 @@ export default function BracketSection({ tournamentId, sets, onSelectSet, disabl
     )
   }
 
-  const rounds = [...new Set(sets.map((s) => s.round))].sort((a, b) => a - b)
+  // start.gg assigns positive rounds to Winners Bracket and negative rounds to Losers Bracket
+  const winnersRounds = [...new Set(sets.filter((s) => s.round > 0).map((s) => s.round))].sort((a, b) => a - b)
+  const losersRounds = [...new Set(sets.filter((s) => s.round < 0).map((s) => s.round))].sort((a, b) => b - a) // Reverse sort for visual rendering (e.g. -1 is Losers Finals, -2 is Losers Semis)
+
+  // Labels for Winners
+  const getWinnersLabel = (roundIndex, totalRounds) => {
+    if (roundIndex === totalRounds - 1) return 'Grand Finals'
+    if (roundIndex === totalRounds - 2) return 'Winners Finals'
+    if (roundIndex === totalRounds - 3) return 'Winners Semis'
+    if (roundIndex === totalRounds - 4) return 'Winners Quarters'
+    return `Winners R${roundIndex + 1}`
+  }
+
+  // Labels for Losers (roundIndex 0 is Losers Finals)
+  const getLosersLabel = (roundIndex) => {
+    if (roundIndex === 0) return 'Losers Finals'
+    if (roundIndex === 1) return 'Losers Semis'
+    if (roundIndex === 2) return 'Losers Quarters'
+    if (roundIndex === 3) return 'Losers R8'
+    return `Losers R${roundIndex + 1}`
+  }
 
   return (
     <div className="overflow-x-auto border border-zinc-800 bg-zinc-950 p-4">
@@ -29,34 +39,68 @@ export default function BracketSection({ tournamentId, sets, onSelectSet, disabl
         <GitBranch size={14} className="text-rose-700" />
         Árbol del bracket
       </div>
-      {rounds.length > 2 && (
+      {(winnersRounds.length > 2 || losersRounds.length > 2) && (
         <p className="mb-2 text-center text-[11px] text-zinc-600 sm:hidden">← Desliza →</p>
       )}
-      <div className="flex min-w-max snap-x snap-mandatory gap-6">
-        {rounds.map((round) => {
-          const matchSets = sets.filter((s) => s.round === round)
-          return (
-            <div key={round} className="flex min-w-[220px] snap-start flex-col">
-              <h2 className="mb-2 font-display text-[12px] font-bold uppercase tracking-[0.14em] text-zinc-500">
-                {ROUND_LABEL[round] ?? `Ronda ${round}`}
-              </h2>
-              <div
-                className="flex flex-1 flex-col justify-around gap-4"
-                style={{ minHeight: `${Math.max(matchSets.length, 1) * 88}px` }}
-              >
-                {matchSets.map((s) => (
-                  <MatchCard
-                    key={s.startgg_set_id}
-                    set={s}
-                    onSelect={onSelectSet}
-                    disabled={disabled}
-                    hasMarket={s.has_market}
-                  />
-                ))}
+      
+      <div className="flex flex-col gap-10">
+        {/* Winners Bracket */}
+        <div className="flex min-w-max snap-x snap-mandatory gap-6">
+          {winnersRounds.map((round, idx) => {
+            const matchSets = sets.filter((s) => s.round === round)
+            return (
+              <div key={round} className="flex min-w-[220px] snap-start flex-col">
+                <h2 className="mb-2 font-display text-[12px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+                  {getWinnersLabel(idx, winnersRounds.length)}
+                </h2>
+                <div
+                  className="flex flex-1 flex-col justify-around gap-4"
+                  style={{ minHeight: `${Math.max(matchSets.length, 1) * 88}px` }}
+                >
+                  {matchSets.map((s) => (
+                    <MatchCard
+                      key={s.startgg_set_id}
+                      set={s}
+                      onSelect={onSelectSet}
+                      disabled={disabled}
+                      hasMarket={s.has_market}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
+
+        {/* Losers Bracket */}
+        {losersRounds.length > 0 && (
+          <div className="flex min-w-max snap-x snap-mandatory gap-6">
+            {losersRounds.map((round, idx) => {
+              const matchSets = sets.filter((s) => s.round === round)
+              return (
+                <div key={round} className="flex min-w-[220px] snap-start flex-col">
+                  <h2 className="mb-2 font-display text-[12px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+                    {getLosersLabel(idx)}
+                  </h2>
+                  <div
+                    className="flex flex-1 flex-col justify-around gap-4"
+                    style={{ minHeight: `${Math.max(matchSets.length, 1) * 88}px` }}
+                  >
+                    {matchSets.map((s) => (
+                      <MatchCard
+                        key={s.startgg_set_id}
+                        set={s}
+                        onSelect={onSelectSet}
+                        disabled={disabled}
+                        hasMarket={s.has_market}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

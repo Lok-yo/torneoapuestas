@@ -16,11 +16,15 @@ export function derivePhase(status, sets = []) {
   if (status === 'CANCELLED') return null
   if (status === 'COMPLETED') return { step: 4, label: PHASE_LABEL[4] }
 
-  const hasCompletedSet = sets.some((s) => s.state === 'COMPLETED')
-  if (hasCompletedSet) return { step: 3, label: PHASE_LABEL[3] }
+  // If we have Top 8 sets, we are in Top 8
+  if (sets.length > 0) {
+    const allCompleted = sets.every(s => s.state === 'COMPLETED')
+    if (allCompleted) return { step: 4, label: PHASE_LABEL[4] }
+    return { step: 3, label: PHASE_LABEL[3] }
+  }
 
-  if (status === 'IN_PROGRESS') return { step: 2, label: PHASE_LABEL[2] }
-  if (status === 'REGISTRATION_CLOSED') return { step: 2, label: PHASE_LABEL[2] }
+  if (status === 'IN_PROGRESS' || status === 'REGISTRATION_CLOSED')
+    return { step: 2, label: PHASE_LABEL[2] }
 
   return { step: 1, label: PHASE_LABEL[1] }
 }

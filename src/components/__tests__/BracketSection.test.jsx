@@ -1,6 +1,12 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import BracketSection from '../BracketSection.jsx'
+
+// Mock the web3 hooks so MatchCard renders without WagmiProvider
+vi.mock('../../lib/web3/hooks.js', () => ({
+  useMarket: () => ({ data: null, isLoading: false, error: null }),
+  useReadContract: () => ({ data: null }),
+}))
 
 const mockSets = [
   { startgg_set_id: 1, tournament_id: 't1', round: 1, slot: 1, state: 'COMPLETED', entrant_a_name: 'Alpha', entrant_b_name: 'Bravo', has_market: false },
@@ -16,9 +22,9 @@ describe('BracketSection round grouping', () => {
     expect(screen.getByText('Winners Finals')).toBeDefined()
     const headings = screen.getAllByRole('heading')
     const roundHeadings = headings.map((h) => h.textContent)
-    const gfIdx = roundHeadings.indexOf('Grand Finals')
     const wfIdx = roundHeadings.indexOf('Winners Finals')
-    expect(gfIdx).toBeLessThan(wfIdx)
+    const gfIdx = roundHeadings.indexOf('Grand Finals')
+    expect(wfIdx).toBeLessThan(gfIdx) // Winners Finals should appear before Grand Finals
   })
 
   it('renders all participant names across rounds', () => {

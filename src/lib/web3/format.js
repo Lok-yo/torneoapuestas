@@ -23,13 +23,13 @@ export function formatOdds(amount) {
   if (amount === undefined || amount === null) return '—'
   if (typeof amount === 'number') {
     if (!Number.isFinite(amount) || amount <= 0) return '—'
-    return amount.toFixed(2)
+    return `x${amount.toFixed(2)}`
   }
   const value = typeof amount === 'bigint' ? amount : BigInt(Math.trunc(Number(amount)))
   if (value === 0n) return '—'
   const whole = value / 1_000_000n
   const frac = ((value % 1_000_000n) * 100n) / 1_000_000n
-  return `${whole.toString()}.${frac.toString().padStart(2, '0')}`
+  return `x${whole.toString()}.${frac.toString().padStart(2, '0')}`
 }
 
 export function openingOddsFromProb(prob) {

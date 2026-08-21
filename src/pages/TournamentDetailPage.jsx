@@ -53,6 +53,8 @@ export default function TournamentDetailPage() {
 
   useEffect(() => {
     load()
+    const timer = setInterval(load, 30000)
+    return () => clearInterval(timer)
   }, [load])
 
   if (state.status === 'not_found') return <Navigate to="/torneos" replace />
@@ -88,7 +90,7 @@ export default function TournamentDetailPage() {
             {[
               { id: 'descripcion', label: 'Descripción' },
               { id: 'brackets', label: 'Brackets' },
-              { id: 'predicciones', label: 'Predicciones' },
+              { id: 'predicciones', label: 'Mercados' },
             ].map((item) => (
               <button
                 key={item.id}

@@ -25,7 +25,7 @@ export default function TournamentsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="kicker">Cartelera</p>
+        <p className="kicker">Torneos en vivo</p>
         <h1 className="mt-1 font-display text-4xl font-bold text-white">Torneos</h1>
         <p className="mt-1 text-[13px] text-zinc-500">Torneos oficiales de Super Smash Bros. Ultimate.</p>
       </div>

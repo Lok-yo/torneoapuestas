@@ -26,7 +26,7 @@ export default function OnchainMarketDetailView() {
   const [outcomeIndex, setOutcomeIndex] = useState(0)
   const [investAmount, setInvestAmount] = useState('10')
   const [tradeError, setTradeError] = useState(null)
-  const [notice, setNotice] = useState(null)
+  
   const [receipt, setReceipt] = useState(null)
   const [names, setNames] = useState(['Jugador 1', 'Jugador 2'])
   const { t } = useI18n()
@@ -75,7 +75,6 @@ export default function OnchainMarketDetailView() {
   const handleBuy = async (e) => {
     e.preventDefault()
     setTradeError(null)
-    setNotice(null)
     try {
       if (userSide && userSide !== outcomeIndex + 1) {
         setTradeError(t('market.alreadyOther'))
@@ -98,7 +97,6 @@ export default function OnchainMarketDetailView() {
       await placeBet({ questionId, investmentAmount: amount, outcomeIndex: BigInt(outcomeIndex) })
       await refetch()
       await refetchBook()
-      setNotice(null)
       setReceipt({
         pick,
         stake: formatUsdc(amount),
@@ -152,7 +150,7 @@ export default function OnchainMarketDetailView() {
               >
                 <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">{idx === 0 ? t('market.home') : t('market.away')}</p>
                 <p className="mt-1 font-display text-3xl uppercase text-white">{name}</p>
-                <p className="mt-2 font-mono text-xl text-lime">{formatOdds(odds) === '—' ? '2.00' : formatOdds(odds)}</p>
+                <p className="mt-2 font-mono text-xl text-lime" title="Si apuestas 10 USDC y ganas, recibes ~19 USDC (después del 5% de comisión de la casa)">{formatOdds(odds) === '—' ? 'x2.00' : formatOdds(odds)}</p>
                 <p className="text-[11px] text-zinc-500">{t('pred.poolPct', { pct })} · {formatUsdc(stake)} USDC</p>
                 {myStake > 0n && (
                   <div className="mt-2 text-left">

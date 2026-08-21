@@ -28,7 +28,7 @@ export default function TournamentPredictionWidget({ tournamentId, sets = [], st
   const [markets, setMarkets] = useState({})
   const [selectedSet, setSelectedSet] = useState(null)
   const [stake, setStake] = useState('10')
-  const [notice, setNotice] = useState(null)
+  
   const [actionError, setActionError] = useState(null)
   const { t } = useI18n()
 
@@ -115,7 +115,6 @@ export default function TournamentPredictionWidget({ tournamentId, sets = [], st
 
   const handleBet = async (line, outcomeIndex) => {
     setActionError(null)
-    setNotice(null)
     const info = markets[line.startgg_set_id]
     if (!info || info.state !== MARKET_STATE.ACTIVE) {
       setActionError(t('pred.lineClosed'))
@@ -149,7 +148,6 @@ export default function TournamentPredictionWidget({ tournamentId, sets = [], st
       })
       await refreshMarkets()
       await refetchHouse()
-      setNotice(null)
       setReceipt({
         name,
         stake: formatUsdc(amount),
@@ -294,7 +292,7 @@ export default function TournamentPredictionWidget({ tournamentId, sets = [], st
                         <div className="flex items-end justify-between gap-2">
                           <div>
                             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{t('pred.odds')}</p>
-                            <p className="font-mono text-2xl text-lime">{formatOdds(odds || 0n) === '—' ? '2.00' : formatOdds(odds)}</p>
+                            <p className="font-mono text-2xl text-lime" title="Si apuestas 10 USDC y ganas, recibes ~19 USDC (después del 5% de comisión de la casa)">{formatOdds(odds || 0n) === '—' ? 'x2.00' : formatOdds(odds)}</p>
                           </div>
                           <p className="text-right text-[11px] text-zinc-500">
                             {t('pred.poolPct', { pct })}

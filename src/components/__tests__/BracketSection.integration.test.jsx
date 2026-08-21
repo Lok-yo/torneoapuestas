@@ -2,6 +2,11 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import BracketSection from '../BracketSection.jsx'
 
+vi.mock('../../lib/web3/hooks.js', () => ({
+  useMarket: () => ({ data: null, isLoading: false, error: null }),
+  useReadContract: () => ({ data: null }),
+}))
+
 const PENDING_SETS = [
   {
     startgg_set_id: 42,

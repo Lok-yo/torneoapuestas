@@ -303,6 +303,10 @@ Deno.serve(async (req) => {
             log.error({ requestId, event: 'startgg_poller.set_ingest_failed', setId: set.id, message: String(err) })
           }
         }
+
+        if (phaseSets.length > 0 && phaseSets.every((s) => s.state === 3)) {
+          await supabase.from('tournaments').update({ status: 'COMPLETED' }).eq('id', tournamentId)
+        }
       }
     }
   } catch (err) {
