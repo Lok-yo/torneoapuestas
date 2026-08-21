@@ -7,10 +7,23 @@ import {
   stat,
   writeFile,
 } from 'node:fs/promises'
+import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    default: { ...actual.default, spawn: spawnMock },
+    spawn: spawnMock,
+  }
+})
+
 import {
   main,
   parseDeployAddresses,
@@ -74,6 +87,7 @@ let rpcMock
 beforeEach(async () => {
   stateDir = await mkdtemp(join(tmpdir(), 'gg2-demo-bootstrap-'))
   rpcMock = createRpc()
+  spawnMock.mockReset()
 })
 
 afterEach(async () => {
@@ -114,7 +128,48 @@ describe('demo bootstrap manifests', () => {
   })
 })
 
+describe('worker image', () => {
+  it('copies the CA bundle from the digest-pinned Foundry stage', async () => {
+    const dockerfile = await readFile(join(process.cwd(), 'Dockerfile'), 'utf8')
+
+    expect(dockerfile).toContain(
+      'COPY --from=foundry /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt',
+    )
+  })
+})
+
 describe('demo bootstrap state machine', () => {
+  it('uses the contracts-prefixed DeployLocal source with the exact production Forge args', async () => {
+    spawnMock.mockImplementation(() => {
+      const child = new EventEmitter()
+      child.stdout = new EventEmitter()
+      child.stderr = new EventEmitter()
+      child.stdout.setEncoding = vi.fn()
+      child.stderr.setEncoding = vi.fn()
+      queueMicrotask(() => {
+        child.stdout.emit('data', forgeOutput)
+        child.emit('close', 0)
+      })
+      return child
+    })
+
+    await main(runtimeEnv(stateDir), { rpc: rpcMock, logEvent: vi.fn() })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'forge',
+      [
+        'script',
+        './contracts/script/DeployLocal.s.sol',
+        '--root',
+        './contracts',
+        '--rpc-url',
+        'http://anvil:8545',
+        '--broadcast',
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    )
+  })
+
   it('rejects a chain other than 80002 before inspecting bootstrap state', async () => {
     rpcMock = createRpc({ chainId: '0x1' })
 

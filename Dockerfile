@@ -49,6 +49,7 @@ FROM node-dependencies AS worker
 COPY . ./
 COPY --from=foundry /usr/local/bin/forge /usr/local/bin/forge
 COPY --from=foundry /usr/local/bin/cast /usr/local/bin/cast
+COPY --from=foundry /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=foundry --chown=node:node /home/foundry/.svm /home/node/.svm
 COPY --from=foundry /app/contracts ./contracts
 RUN mkdir -p /demo-state \

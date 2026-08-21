@@ -158,7 +158,7 @@ async function verifyDeployedCode(rpcUrl, addresses, rpcCall) {
 async function runForge() {
   const args = [
     'script',
-    './script/DeployLocal.s.sol',
+    './contracts/script/DeployLocal.s.sol',
     '--root',
     './contracts',
     '--rpc-url',
