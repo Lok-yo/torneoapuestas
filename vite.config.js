@@ -6,10 +6,13 @@ import { anvilDevPlugin } from './vite-plugin-anvil.js'
 const demoMode = process.env.VITE_DEMO_ANVIL === 'true'
 
 if (demoMode) {
-  for (const name of ['ANVIL_RPC_URL', 'APP_HOST', 'PORT']) {
+  for (const name of ['ANVIL_RPC_URL', 'APP_HOST', 'PORT', 'VITE_AMOY_RPC_URL']) {
     if (!String(process.env[name] || '').trim()) {
       throw new Error(`${name} is required when VITE_DEMO_ANVIL=true.`)
     }
+  }
+  if (process.env.VITE_AMOY_RPC_URL !== '/rpc') {
+    throw new Error('VITE_AMOY_RPC_URL must be exactly /rpc when VITE_DEMO_ANVIL=true.')
   }
 }
 
