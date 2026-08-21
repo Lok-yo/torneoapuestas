@@ -138,6 +138,7 @@ export const en = {
       'You are among the first. Payout depends on how much is bet on the opponent. Until someone covers the other side, there is no estimated payout.',
     missingOther: 'The other side is empty. If it closes like this, money is refunded.',
     seeDetail: 'See bet details',
+    oddsTooltip: 'If you bet 10 USDC and win, you get ~19 USDC back (after the house\'s 5% fee)',
     openLine: 'Open line · 101 USDC (bond + liquidity)',
     lineClosed: 'This line is not open for betting yet.',
     alreadyOther: 'You already bet on the other player. You can only pick one side in this match.',
@@ -182,5 +183,8 @@ export const en = {
     loading: 'Loading…',
     player1: 'Player 1',
     player2: 'Player 2',
+  },
+  match: {
+    waitingPlayers: 'Waiting for players...',
   },
 }

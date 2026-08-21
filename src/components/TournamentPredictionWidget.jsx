@@ -292,7 +292,7 @@ export default function TournamentPredictionWidget({ tournamentId, sets = [], st
                         <div className="flex items-end justify-between gap-2">
                           <div>
                             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{t('pred.odds')}</p>
-                            <p className="font-mono text-2xl text-lime" title="Si apuestas 10 USDC y ganas, recibes ~19 USDC (después del 5% de comisión de la casa)">{formatOdds(odds || 0n) === '—' ? 'x2.00' : formatOdds(odds)}</p>
+                            <p className="font-mono text-2xl text-lime" title={t('pred.oddsTooltip')}>{formatOdds(odds || 0n) === '—' ? 'x2.00' : formatOdds(odds)}</p>
                           </div>
                           <p className="text-right text-[11px] text-zinc-500">
                             {t('pred.poolPct', { pct })}

@@ -138,6 +138,7 @@ export const es = {
       'Eres de los primeros. La ganancia depende de cuánto se apueste al jugador contrario. Hasta que alguien cubra el otro lado, no hay pago estimado.',
     missingOther: 'Falta el otro lado. Si se cierra así, se devuelve el dinero.',
     seeDetail: 'Ver detalle de la apuesta',
+    oddsTooltip: 'Si apuestas 10 USDC y ganas, recibes ~19 USDC (después del 5% de comisión de la casa)',
     openLine: 'Abrir línea · 101 USDC (bono + liquidez)',
     lineClosed: 'Esta línea todavía no está abierta para apostar.',
     alreadyOther: 'Ya apostaste al otro jugador. En este partido solo puedes ir por un lado.',
@@ -182,5 +183,8 @@ export const es = {
     loading: 'Cargando…',
     player1: 'Jugador 1',
     player2: 'Jugador 2',
+  },
+  match: {
+    waitingPlayers: 'Esperando jugadores...',
   },
 }
