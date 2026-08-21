@@ -76,6 +76,10 @@ El 5% de la casa se anota en `houseTake` y el USDC **se queda dentro del contrat
 
 `Cobrar`/cancelar en la billetera **no** cobra el premio del partido: solo devuelve la apuesta si todavía estás dentro de los 10 minutos y el mercado no se liquidó.
 
+## Disposable university VPS demo
+
+La [guía del demo universitario desechable en un VPS](docs/deployment/disposable-vps-demo.md) describe una instalación temporal con un solo puerto HTTPS. Sirve deliberadamente el middleware de Vite y el RPC administrativo de Anvil mediante proxy, por lo que **no está lista para producción**. Usa el worker de liquidación de Compose; no activa la ruta inconclusa de Supabase Edge `settlement-tick`.
+
 ### Cuando esto se suba a un VPS
 
 `scripts/settlement/tick.mjs` (el núcleo de la lógica) es agnóstico al runtime — la misma función corre hoy en un loop de Node y, sin cambios, puede correr como Edge Function con `pg_cron` (igual que el poller). `supabase/deploy/settlement-tick-cron.sql` ya tiene la migración lista para ese día — vive fuera de `supabase/migrations/` a propósito, porque una migración comentada igual queda marcada como "aplicada" y nunca se puede reactivar.
