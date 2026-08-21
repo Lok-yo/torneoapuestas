@@ -1,33 +1,60 @@
-// Shared tournament list with module-level singleton cache.
-// Avoids duplicate listTournaments() calls across HomePage, RightRail, TournamentsPage.
-// Cache is invalidated on mount (stale-while-revalidate pattern: serves cache instantly,
-// re-fetches in background to stay fresh).
+// Shared tournament list with module-level singleton cache and 30s bounded polling.
+// Serves cache instantly (stale-while-revalidate), polls every 30s, and returns data
+// grouped into { main, finished }.
 import { useEffect, useState } from 'react'
-import { listTournaments } from '../repositories/tournamentRepository.js'
+import { listTournaments, listFinishedTournaments } from '../repositories/tournamentRepository.js'
 
 let cache = null
 let inflight = null
 
+function diffMerge(currentList, newList) {
+  if (!currentList) return newList
+  if (!newList) return currentList
+
+  const currentMap = new Map(currentList.map((item) => [item.id, item]))
+  let changed = currentList.length !== newList.length
+
+  const merged = newList.map((newItem) => {
+    const existing = currentMap.get(newItem.id)
+    if (!existing) {
+      changed = true
+      return newItem
+    }
+    const isDifferent = JSON.stringify(existing) !== JSON.stringify(newItem)
+    if (isDifferent) {
+      changed = true
+      return { ...existing, ...newItem }
+    }
+    return existing
+  })
+
+  return changed ? merged : currentList
+}
+
+async function fetchBoth() {
+  const [main, finished] = await Promise.all([listTournaments(), listFinishedTournaments()])
+  const nextData = { main: main ?? [], finished: finished ?? [] }
+  if (!cache) {
+    cache = nextData
+  } else {
+    cache = {
+      main: diffMerge(cache.main, nextData.main),
+      finished: diffMerge(cache.finished, nextData.finished),
+    }
+  }
+  return cache
+}
+
 function fetchOnce() {
   if (inflight) return inflight
-  inflight = listTournaments()
-    .then((data) => {
-      cache = data
-      return data
-    })
-    .finally(() => {
-      inflight = null
-    })
+  inflight = fetchBoth().finally(() => {
+    inflight = null
+  })
   return inflight
 }
 
-// Seed the cache on first import (fire-and-forget). Swallow the rejection
-// here: an unconfigured backend must not surface as an unhandled
-// pageerror. The hook's useEffect still observes success/error.
-if (!cache && !inflight) fetchOnce().catch(() => {})
-
 /**
- * @returns {{ status: 'loading'|'ready'|'error', data: import('../repositories/tournamentRepository.js').Tournament[]|null, error: import('../lib/errors.js').AppError|null }}
+ * @returns {{ status: 'loading'|'ready'|'error', data: { main: Array<object>, finished: Array<object> }|null, error: any }}
  */
 export function useTournaments() {
   const [state, setState] = useState(() => ({
@@ -39,20 +66,29 @@ export function useTournaments() {
   useEffect(() => {
     let cancelled = false
 
-    if (cache) {
-      setState({ status: 'ready', data: cache, error: null })
+    const doFetch = () => {
+      fetchOnce()
+        .then((data) => {
+          if (!cancelled) setState({ status: 'ready', data, error: null })
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setState((prev) => ({
+              status: prev.data ? 'ready' : 'error',
+              data: prev.data,
+              error,
+            }))
+          }
+        })
     }
 
-    fetchOnce()
-      .then((data) => {
-        if (!cancelled) setState({ status: 'ready', data, error: null })
-      })
-      .catch((error) => {
-        if (!cancelled) setState({ status: 'error', data: null, error })
-      })
+    doFetch()
+
+    const interval = setInterval(doFetch, 30_000)
 
     return () => {
       cancelled = true
+      clearInterval(interval)
     }
   }, [])
 

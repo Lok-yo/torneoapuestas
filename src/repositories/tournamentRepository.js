@@ -39,23 +39,60 @@ function isMissingColumnError(error, column) {
 const TOURNAMENT_SET_FIELDS =
   'startgg_set_id, tournament_id, startgg_event_id, phase_name, round, slot, state, entrant_a_name, entrant_b_name, event_starts_at, started_at, completed_at, updated_at, winner_name, has_market, market_question_id'
 
-/** Lists tournaments visible to the current caller (published, plus the organizer's own drafts). */
+/** Lists main tracked tournaments visible to the current caller. */
 export async function listTournaments() {
   assertConfigured()
   const { data, error } = await supabase
-    .from('tournaments')
+    .from('tracked_tournaments_view')
     .select(TOURNAMENT_FIELDS)
+    .eq('list', 'main')
     .order('created_at', { ascending: false })
 
   if (error) {
-    if (isMissingColumnError(error, 'startgg_event_id')) {
-      const retry = await supabase.from('tournaments').select(TOURNAMENT_FIELDS_FALLBACK).order('created_at', { ascending: false })
-      if (retry.error) throw toAppError({ error: { code: 'UNAVAILABLE', message: retry.error.message } })
-      return retry.data ?? []
+    const fallback = await supabase
+      .from('tournaments')
+      .select(TOURNAMENT_FIELDS)
+      .order('created_at', { ascending: false })
+    if (fallback.error) {
+      if (isMissingColumnError(fallback.error, 'startgg_event_id')) {
+        const retry = await supabase.from('tournaments').select(TOURNAMENT_FIELDS_FALLBACK).order('created_at', { ascending: false })
+        if (retry.error) throw toAppError({ error: { code: 'UNAVAILABLE', message: retry.error.message } })
+        return retry.data ?? []
+      }
+      throw toAppError({ error: { code: 'UNAVAILABLE', message: fallback.error.message } })
     }
+    return fallback.data ?? []
+  }
+  return data ?? []
+}
+
+/** Lists finished tracked tournaments ('finalizados'). */
+export async function listFinishedTournaments() {
+  assertConfigured()
+  const { data, error } = await supabase
+    .from('tracked_tournaments_view')
+    .select(TOURNAMENT_FIELDS)
+    .eq('list', 'finalizados')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    if (String(error.message ?? '').includes('does not exist')) return []
     throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
   }
   return data ?? []
+}
+
+/** Submits a start.gg URL to track a tournament via startgg-import Edge Function. */
+export async function addTournamentByLink(url) {
+  assertConfigured()
+  const { data, error } = await supabase.functions.invoke('startgg-import', {
+    body: { url },
+  })
+
+  if (error) {
+    throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
+  }
+  return data
 }
 
 /** Reads one tournament visible to the current caller, or null if not found/not visible. */
@@ -277,7 +314,7 @@ export async function getSetById(startggSetId) {
   const { data, error } = await supabase
     .from('public_tournament_sets_view')
     .select(TOURNAMENT_SET_FIELDS)
-    .eq('question_id', questionId)
+    .eq('startgg_set_id', startggSetId)
     .maybeSingle()
 
   if (error) throw toAppError({ error: { code: 'UNAVAILABLE', message: error.message } })
