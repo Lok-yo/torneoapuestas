@@ -10,9 +10,9 @@ import { useTournaments } from '../hooks/useTournaments.js'
 const ACTIVE = new Set(['REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'IN_PROGRESS'])
 
 export default function HomePage() {
-  const { status: boardStatus, data: allTournaments } = useTournaments()
+  const { status: boardStatus, data } = useTournaments()
   const { data: markets } = useAsync(() => listMarkets().catch(() => []), [])
-  const tournaments = allTournaments ?? []
+  const tournaments = data?.main ?? []
   const live = tournaments.filter((t) => t.status === 'IN_PROGRESS')
   const featured = live[0] ?? tournaments.find((t) => ACTIVE.has(t.status)) ?? tournaments[0]
   const featuredGame = featured ? GAMES.find((g) => g.id === featured.game_id) : GAMES[2]
@@ -127,9 +127,9 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {boardStatus === 'loading' && <p className="px-4 py-10 text-center text-[13px] text-zinc-500">Cargando torneos…</p>}
+        {boardStatus === 'loading' && <p role="status" aria-live="polite" className="px-4 py-10 text-center text-[13px] text-zinc-500">Cargando torneos…</p>}
         {boardStatus === 'error' && (
-          <p className="px-4 py-10 text-center text-[13px] text-hot">No pudimos cargar los torneos destacados ahora mismo.</p>
+          <p role="alert" className="px-4 py-10 text-center text-[13px] text-hot">No pudimos cargar los torneos destacados ahora mismo.</p>
         )}
         {boardStatus === 'ready' && board.length === 0 && (
           <p className="px-4 py-10 text-center text-[13px] text-zinc-500">Todavía no hay torneos publicados.</p>

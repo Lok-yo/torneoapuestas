@@ -9,10 +9,11 @@ import { useTournaments } from '../hooks/useTournaments.js'
 const LIVE = new Set(['IN_PROGRESS', 'REGISTRATION_OPEN'])
 
 export default function RightRail() {
-  const { data: tournaments } = useTournaments()
+  const { data } = useTournaments()
   const { data: markets } = useAsync(() => listMarkets().catch(() => []), [])
 
-  const live = (tournaments ?? []).filter((t) => LIVE.has(t.status)).slice(0, 5)
+  const tournaments = data?.main ?? []
+  const live = tournaments.filter((t) => LIVE.has(t.status)).slice(0, 5)
   const tape = (Array.isArray(markets) ? markets : [])
     .flatMap((m) =>
       (m.market_outcomes || []).slice(0, 2).map((o) => ({
