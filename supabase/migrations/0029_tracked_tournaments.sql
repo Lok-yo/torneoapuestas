@@ -24,6 +24,34 @@ comment on table public.tracked_tournaments is
 alter table public.tracked_tournaments enable row level security;
 revoke all on public.tracked_tournaments from anon, authenticated;
 
+create table public.startgg_deferred_work (
+  startgg_event_id bigint primary key,
+  source text not null check (source in ('mx', 'tracked', 'both')),
+  created_at timestamptz not null default now()
+);
+
+comment on table public.startgg_deferred_work is
+  'Deferred poller work set for startgg-poller when cycle budget is exhausted or 429 occurs. Service-role only.';
+
+alter table public.startgg_deferred_work enable row level security;
+revoke all on public.startgg_deferred_work from anon, authenticated;
+
+create or replace function public.upsert_startgg_deferred_work(
+  p_startgg_event_id bigint,
+  p_source text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  insert into public.startgg_deferred_work (startgg_event_id, source)
+  values (p_startgg_event_id, p_source)
+  on conflict (startgg_event_id) do nothing;
+end;
+$$;
+
 -- Seed all already-published start.gg tournaments so this migration does not
 -- change the visible list while moving its authority to the registry. The
 -- DISTINCT ON guard makes replay safe even if old data contains duplicates.

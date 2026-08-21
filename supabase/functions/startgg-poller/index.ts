@@ -21,6 +21,7 @@ import { log, newRequestId } from '../_shared/log.js'
 import { computeBackoffUntil, CycleBudget, isBackingOff, laneForCycle, partitionByBudget } from './backoff.ts'
 import { allSetsCompleted, pickPhase } from './phase.ts'
 import { buildSetRow, nextSlot, processSet } from './sets.ts'
+import { buildUnionWork } from './union.ts'
 
 const STARTGG_GRAPHQL_URL = 'https://api.start.gg/gql/alpha'
 const SOURCE_KEY = 'startgg-mx-poller'
@@ -109,6 +110,26 @@ const MX_TOURNAMENTS_QUERY = /* GraphQL */ `
             name
           }
         }
+      }
+    }
+  }
+`
+
+const EVENT_BY_ID_QUERY = /* GraphQL */ `
+  query EventById($id: ID!) {
+    event(id: $id) {
+      id
+      name
+      startAt
+      videogame { id }
+      tournament {
+        id
+        name
+        countryCode
+      }
+      phases {
+        id
+        name
       }
     }
   }
@@ -244,6 +265,12 @@ Deno.serve(async (req) => {
     (t) => t.countryCode === 'MX', // belt-and-suspenders: server-side filter already applied, re-checked here (spec "Non-MX tournament excluded")
   )
 
+  const { data: trackedRows } = await supabase.from('tracked_tournaments').select('startgg_event_id')
+  const trackedEvents = (trackedRows ?? []).map((r) => ({ startgg_event_id: Number(r.startgg_event_id) }))
+
+  const mxEvents = tournaments.flatMap((t) => (t.events ?? []).map((e) => ({ startgg_event_id: Number(e.id), tournament: t, event: e })))
+  const unionWork = buildUnionWork(mxEvents, trackedEvents)
+
   const { processed, deferred } = partitionByBudget(tournaments, budget)
 
   let ingestedSets = 0
@@ -291,6 +318,7 @@ Deno.serve(async (req) => {
         // bracket finalize a tournament with unfinished pools).
         const eventSets: StartggSet[] = []
         const roundCounters = new Map<number, number>()
+        let hasSetIngestError = false
         for (const set of phaseSets) {
           try {
             const row = buildSetRow({
@@ -306,11 +334,12 @@ Deno.serve(async (req) => {
             eventSets.push(set)
             ingestedSets++
           } catch (err) {
+            hasSetIngestError = true
             log.error({ requestId, event: 'startgg_poller.set_ingest_failed', setId: set.id, message: String(err) })
           }
         }
 
-        if (allSetsCompleted(eventSets)) {
+        if (!hasSetIngestError && eventSets.length > 0 && allSetsCompleted(eventSets)) {
           await supabase.from('tournaments').update({ status: 'COMPLETED' }).eq('id', tournamentId)
         }
       }
@@ -330,6 +359,19 @@ Deno.serve(async (req) => {
     }
     log.error({ requestId, event: 'startgg_poller.cycle_failed', message: String(err) })
     return new Response(JSON.stringify({ error: 'UNAVAILABLE' }), { status: 503 })
+  }
+
+  if (deferred.length > 0) {
+    for (const t of deferred) {
+      for (const e of t.events ?? []) {
+        if (e.id) {
+          await supabase.rpc('upsert_startgg_deferred_work', {
+            p_startgg_event_id: Number(e.id),
+            p_source: 'mx',
+          })
+        }
+      }
+    }
   }
 
   await supabase.from('startgg_ingestion_cursor').upsert({
