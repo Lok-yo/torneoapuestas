@@ -21,6 +21,11 @@ const DEPLOYMENT_KEYS = [
 ]
 
 const PUBLIC_KEYS = DEPLOYMENT_KEYS.map(([, publicKey]) => publicKey)
+const SETTLEMENT_KEYS = [
+  'VITE_RESOLUTION_ADAPTER_ADDRESS',
+  'VITE_HOUSE_BANK_ADDRESS',
+  'RELAYER_PRIVATE_KEY',
+]
 
 function logEvent(event, details = {}) {
   console.log(JSON.stringify({ event, ...details }))
@@ -36,16 +41,26 @@ function requireAddress(value, key) {
 export function parseDeployAddresses(output) {
   const addresses = {}
   const missing = []
+  const duplicates = []
 
   for (const [forgeKey, publicKey] of DEPLOYMENT_KEYS) {
-    const matches = [...output.matchAll(new RegExp(`^${forgeKey}=(${ADDRESS_PATTERN})\\r?$`, 'gm'))]
-    if (matches.length !== 1) {
+    const matches = [
+      ...output.matchAll(new RegExp(`^[ \\t]*${forgeKey}=(${ADDRESS_PATTERN})\\r?$`, 'gm')),
+    ]
+    if (matches.length === 0) {
       missing.push(forgeKey)
+      continue
+    }
+    if (matches.length > 1) {
+      duplicates.push(forgeKey)
       continue
     }
     addresses[publicKey] = matches[0][1]
   }
 
+  if (duplicates.length > 0) {
+    throw new Error(`Duplicate deployment addresses: ${duplicates.join(', ')}`)
+  }
   if (missing.length > 0) {
     throw new Error(`Missing deployment addresses: ${missing.join(', ')}`)
   }
@@ -101,16 +116,16 @@ async function rpc(rpcUrl, method, params = [], signal) {
   return payload.result
 }
 
-async function waitForExpectedChain(rpcUrl) {
+async function waitForExpectedChain(rpcUrl, rpcCall, log) {
   const deadline = Date.now() + 60_000
   let attempt = 0
-  logEvent('demo-bootstrap.waiting')
+  log('demo-bootstrap.waiting')
 
   while (Date.now() < deadline) {
     attempt += 1
     const remaining = deadline - Date.now()
     try {
-      const chainId = await rpc(
+      const chainId = await rpcCall(
         rpcUrl,
         'eth_chainId',
         [],
@@ -130,10 +145,10 @@ async function waitForExpectedChain(rpcUrl) {
   throw new Error(`Anvil was not ready on chain ${EXPECTED_CHAIN_ID} after 60 seconds (${attempt} attempts)`)
 }
 
-async function verifyDeployedCode(rpcUrl, addresses) {
+async function verifyDeployedCode(rpcUrl, addresses, rpcCall) {
   for (const key of PUBLIC_KEYS) {
     const address = requireAddress(addresses[key], key)
-    const code = await rpc(rpcUrl, 'eth_getCode', [address, 'latest'])
+    const code = await rpcCall(rpcUrl, 'eth_getCode', [address, 'latest'])
     if (!/^0x[0-9a-fA-F]+$/.test(code) || code === '0x') {
       throw new Error(`No deployed bytecode found for ${key}`)
     }
@@ -182,9 +197,39 @@ async function writeManifest(path, contents, mode) {
   await rename(temporaryPath, path)
 }
 
-function loadExistingAddresses(publicPath, settlementPath) {
-  const publicEnv = loadEnvLocal(pathToFileURL(publicPath), {})
-  const settlementEnv = loadEnvLocal(pathToFileURL(settlementPath), {})
+async function loadManifest(path, expectedKeys, expectedMode, name) {
+  const manifest = loadEnvLocal(pathToFileURL(path), {})
+  const actualKeys = Object.keys(manifest)
+  const missingKeys = expectedKeys.filter((key) => !actualKeys.includes(key))
+  const unexpectedKeys = actualKeys.filter((key) => !expectedKeys.includes(key))
+
+  if (missingKeys.length > 0) {
+    throw new Error(`Missing keys in ${name}: ${missingKeys.join(', ')}`)
+  }
+  if (unexpectedKeys.length > 0) {
+    throw new Error(`Unexpected keys in ${name}: ${unexpectedKeys.join(', ')}`)
+  }
+
+  const actualMode = (await stat(path)).mode & 0o777
+  if (actualMode !== expectedMode) {
+    throw new Error(
+      `${name} must have mode ${expectedMode.toString(8).padStart(4, '0')}; got ${actualMode
+        .toString(8)
+        .padStart(4, '0')}`,
+    )
+  }
+
+  return manifest
+}
+
+async function loadExistingAddresses(publicPath, settlementPath) {
+  const publicEnv = await loadManifest(publicPath, PUBLIC_KEYS, 0o644, 'public.env')
+  const settlementEnv = await loadManifest(
+    settlementPath,
+    SETTLEMENT_KEYS,
+    0o600,
+    'settlement.env',
+  )
   const addresses = Object.fromEntries(
     PUBLIC_KEYS.map((key) => [key, requireAddress(publicEnv[key], key)]),
   )
@@ -200,13 +245,16 @@ function loadExistingAddresses(publicPath, settlementPath) {
   return addresses
 }
 
-export async function main(runtimeEnv = process.env) {
+export async function main(runtimeEnv = process.env, dependencies = {}) {
+  const rpcCall = dependencies.rpc ?? rpc
+  const deploy = dependencies.runForge ?? runForge
+  const log = dependencies.logEvent ?? logEvent
   const rpcUrl = runtimeEnv.ANVIL_RPC_URL
   const stateDir = runtimeEnv.DEMO_STATE_DIR
   if (!rpcUrl) throw new Error('ANVIL_RPC_URL is required')
   if (!stateDir) throw new Error('DEMO_STATE_DIR is required')
 
-  await waitForExpectedChain(rpcUrl)
+  await waitForExpectedChain(rpcUrl, rpcCall, log)
   await mkdir(stateDir, { recursive: true, mode: 0o700 })
 
   const publicPath = join(stateDir, 'public.env')
@@ -221,24 +269,24 @@ export async function main(runtimeEnv = process.env) {
   }
 
   if (hasPublicManifest) {
-    const addresses = loadExistingAddresses(publicPath, settlementPath)
-    await verifyDeployedCode(rpcUrl, addresses)
-    logEvent('demo-bootstrap.reused')
+    const addresses = await loadExistingAddresses(publicPath, settlementPath)
+    await verifyDeployedCode(rpcUrl, addresses, rpcCall)
+    log('demo-bootstrap.reused')
     return
   }
 
-  const nonce = await rpc(rpcUrl, 'eth_getTransactionCount', [ANVIL_ACCOUNT, 'latest'])
+  const nonce = await rpcCall(rpcUrl, 'eth_getTransactionCount', [ANVIL_ACCOUNT, 'latest'])
   if (nonce.toLowerCase() !== '0x0') {
     throw new Error(`Partial bootstrap state: deployer nonce is ${nonce} without manifests`)
   }
 
-  const forgeOutput = await runForge()
+  const forgeOutput = await deploy()
   const addresses = parseDeployAddresses(forgeOutput)
-  await verifyDeployedCode(rpcUrl, addresses)
+  await verifyDeployedCode(rpcUrl, addresses, rpcCall)
 
   await writeManifest(publicPath, renderPublicManifest(addresses), 0o644)
   await writeManifest(settlementPath, renderSettlementManifest(addresses), 0o600)
-  logEvent('demo-bootstrap.deployed')
+  log('demo-bootstrap.deployed')
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
