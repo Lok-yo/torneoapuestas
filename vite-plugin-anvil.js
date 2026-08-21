@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { loadEnvLocal } from './scripts/_env.mjs'
 import { isDemoAnvil, resolveInternalRpcUrl } from './src/lib/web3/runtime.js'
 
-const FALLBACK_ANVIL_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+const ANVIL_DEPLOYER_ACCOUNT = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 
 const FACTORY_ABI = parseAbi([
   'function registerStartggEvent(uint256 startggEventId)',
@@ -45,13 +45,14 @@ async function readBody(req) {
   }
 }
 
-function deployerKey(env, url) {
-  // Local Anvil's owner is always the default account 0. The Amoy key in
-  // .env.local is not the MarketFactory owner on 127.0.0.1 and register
-  // reverts NotOwner — which MetaMask surfaces as an empty execution revert.
-  if (isDemoAnvil(env, url || resolveInternalRpcUrl(env))) return FALLBACK_ANVIL_KEY
-  const key = env.DEPLOYER_PRIVATE_KEY || FALLBACK_ANVIL_KEY
-  return key.startsWith('0x') ? key : `0x${key}`
+export function resolveWalletAccount(env, url) {
+  // Anvil exposes account 0 through JSON-RPC, so demo helpers never need its
+  // published development key in the app process or image.
+  if (isDemoAnvil(env, url || resolveInternalRpcUrl(env))) return ANVIL_DEPLOYER_ACCOUNT
+
+  const key = String(env.DEPLOYER_PRIVATE_KEY || '').trim()
+  if (!key) throw new Error('DEPLOYER_PRIVATE_KEY is required outside demo Anvil')
+  return privateKeyToAccount(key.startsWith('0x') ? key : `0x${key}`)
 }
 
 async function rpc(url, method, params) {
@@ -127,7 +128,7 @@ async function impersonateSend(url, user, to, data, gas = '0x1e8480') {
 
 function clients(env) {
   const url = resolveInternalRpcUrl(env)
-  const account = privateKeyToAccount(deployerKey(env, url))
+  const account = resolveWalletAccount(env, url)
   const transport = http(url)
   return {
     account,

@@ -32,7 +32,9 @@ services:
     security_opt: [no-new-privileges:true]
 
   bootstrap:
-    build: .
+    build:
+      context: .
+      target: worker
     entrypoint: ["node", "scripts/demo-bootstrap.mjs"]
     environment:
       ANVIL_RPC_URL: http://anvil:8545
@@ -48,7 +50,9 @@ services:
     security_opt: [no-new-privileges:true]
 
   app:
-    build: .
+    build:
+      context: .
+      target: app
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
     environment:
       NODE_ENV: production
@@ -80,7 +84,9 @@ services:
       retries: 12
 
   settlement:
-    build: .
+    build:
+      context: .
+      target: worker
     command: ["npm", "run", "settle:loop"]
     environment:
       NODE_ENV: production

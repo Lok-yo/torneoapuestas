@@ -1,3 +1,23 @@
+FROM node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436 AS node-dependencies
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+
+FROM node-dependencies AS app
+
+RUN groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin app
+COPY --chown=app:app index.html vite.config.js vite-plugin-anvil.js ./
+COPY --chown=app:app public/ ./public/
+COPY --chown=app:app src/ ./src/
+COPY --chown=app:app scripts/_env.mjs scripts/demo-entrypoint.sh ./scripts/
+RUN mkdir -p /demo-state /app/node_modules/.vite \
+    && chown -R app:app /app /demo-state
+USER app
+EXPOSE 3000
+ENTRYPOINT ["scripts/demo-entrypoint.sh"]
+
 FROM ghcr.io/foundry-rs/foundry@sha256:8347b728d5d393dac1c018691b36f506d23b9dcd78341d40ea0fcb11c3a19cdd AS foundry
 
 USER root
@@ -17,11 +37,8 @@ RUN mkdir -p /demo-state && chown 1000:1000 /demo-state
 USER foundry
 ENTRYPOINT ["anvil"]
 
-FROM node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
+FROM node-dependencies AS worker
 
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
 COPY . ./
 COPY --from=foundry /usr/local/bin/forge /usr/local/bin/forge
 COPY --from=foundry /usr/local/bin/cast /usr/local/bin/cast
@@ -30,5 +47,4 @@ COPY --from=foundry /app/contracts ./contracts
 RUN mkdir -p /demo-state \
     && chown -R 1000:1000 /app /demo-state
 USER node
-EXPOSE 3000
 ENTRYPOINT ["scripts/demo-entrypoint.sh"]
