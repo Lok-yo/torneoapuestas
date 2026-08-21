@@ -4,16 +4,23 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-FROM node-dependencies AS app
+FROM node-dependencies AS app-dependencies
 
+RUN find node_modules/ox/tempo -type f -name '*.test.ts' -delete
+
+FROM node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436 AS app
+
+WORKDIR /app
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin app
+COPY --from=app-dependencies --chown=app:app /app/package.json /app/package-lock.json ./
+COPY --from=app-dependencies --chown=app:app /app/node_modules ./node_modules
 COPY --chown=app:app index.html vite.config.js vite-plugin-anvil.js ./
 COPY --chown=app:app public/ ./public/
 COPY --chown=app:app src/ ./src/
 COPY --chown=app:app scripts/_env.mjs scripts/demo-entrypoint.sh ./scripts/
 RUN mkdir -p /demo-state /app/node_modules/.vite \
-    && chown -R app:app /app /demo-state
+    && chown app:app /app /demo-state /app/node_modules/.vite
 USER app
 EXPOSE 3000
 ENTRYPOINT ["scripts/demo-entrypoint.sh"]
