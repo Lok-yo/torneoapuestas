@@ -84,3 +84,14 @@ export function mapStartggState(state: number): 'COMPLETED' | 'IN_PROGRESS' | 'P
   if (state === 2) return 'IN_PROGRESS'
   return 'PENDING'
 }
+
+/**
+ * True only when at least one set was ingested AND every set is
+ * COMPLETED (start.gg state 3). The poller marks a tournament COMPLETED
+ * from the accumulated eventSets across all polled phases — never from a
+ * single phase's sets (tasks.md 2.3: the phase-only check let one
+ * completed bracket phase finalize a tournament with unfinished pools).
+ */
+export function allSetsCompleted(sets: { state: number }[]): boolean {
+  return sets.length > 0 && sets.every((s) => s.state === 3)
+}

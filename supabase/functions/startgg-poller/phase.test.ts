@@ -6,7 +6,21 @@
 // 2.2/2.4.
 
 import { assertEquals } from 'jsr:@std/assert@1'
-import { mapStartggState, normalizePhaseName, pickPhase } from './phase.ts'
+import { allSetsCompleted, mapStartggState, normalizePhaseName, pickPhase } from './phase.ts'
+
+// RED (now GREEN): the poller must mark a tournament COMPLETED only when
+// EVERY set ingested across all polled phases has state===3 — the phase-only
+// check was replaced by the allSetsCompleted accumulator (tasks.md 2.1-2.3).
+
+Deno.test('allSetsCompleted: true only when every set is COMPLETED (state 3)', () => {
+  assertEquals(allSetsCompleted([{ state: 3 }, { state: 3 }]), true)
+  assertEquals(allSetsCompleted([{ state: 3 }, { state: 2 }]), false)
+  assertEquals(allSetsCompleted([{ state: 3 }, { state: 4 }]), false)
+})
+
+Deno.test('allSetsCompleted: an empty set list is never completed', () => {
+  assertEquals(allSetsCompleted([]), false)
+})
 
 Deno.test('normalizePhaseName strips accents, lowercases, and collapses whitespace', () => {
   assertEquals(normalizePhaseName('Top 8 Bracket'), 'top 8 bracket')

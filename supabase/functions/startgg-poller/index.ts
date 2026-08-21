@@ -19,7 +19,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { log, newRequestId } from '../_shared/log.js'
 import { computeBackoffUntil, CycleBudget, isBackingOff, laneForCycle, partitionByBudget } from './backoff.ts'
-import { pickPhase } from './phase.ts'
+import { allSetsCompleted, pickPhase } from './phase.ts'
 import { buildSetRow, nextSlot, processSet } from './sets.ts'
 
 const STARTGG_GRAPHQL_URL = 'https://api.start.gg/gql/alpha'
@@ -285,6 +285,11 @@ Deno.serve(async (req) => {
         }
 
         const phaseSets = await fetchPhaseSets(startggToken, phase.id, budget, requestId)
+        // Accumulate every set ingested for this event across phases so the
+        // COMPLETED decision below covers the whole tournament, not just the
+        // picked phase (tasks.md 2.3; the phase-only check let a finished
+        // bracket finalize a tournament with unfinished pools).
+        const eventSets: StartggSet[] = []
         const roundCounters = new Map<number, number>()
         for (const set of phaseSets) {
           try {
@@ -298,13 +303,14 @@ Deno.serve(async (req) => {
               slot: nextSlot(roundCounters, set.round),
             })
             await processSet(supabase, row)
+            eventSets.push(set)
             ingestedSets++
           } catch (err) {
             log.error({ requestId, event: 'startgg_poller.set_ingest_failed', setId: set.id, message: String(err) })
           }
         }
 
-        if (phaseSets.length > 0 && phaseSets.every((s) => s.state === 3)) {
+        if (allSetsCompleted(eventSets)) {
           await supabase.from('tournaments').update({ status: 'COMPLETED' }).eq('id', tournamentId)
         }
       }
