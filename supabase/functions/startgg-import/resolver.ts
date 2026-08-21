@@ -30,7 +30,7 @@ export function resolveSupportedEvent(
     .filter((candidate): candidate is { event: ResolvableEvent; mapping: SupportedEventMapping } => Boolean(candidate.mapping))
 
   if (requestedSlug) {
-    return supported.find(({ event }) => event.slug === requestedSlug) ?? null
+    return supported.find(({ event }) => event.slug === requestedSlug || event.slug?.endsWith('/' + requestedSlug)) ?? null
   }
 
   return supported.sort((a, b) => Number(a.event.id) - Number(b.event.id) || a.event.name.localeCompare(b.event.name))[0] ?? null

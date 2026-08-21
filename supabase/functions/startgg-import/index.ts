@@ -28,7 +28,7 @@ const TOURNAMENT_QUERY = /* GraphQL */ `
         name
         startAt
         videogame { id }
-        phases { nodes { id name } }
+        phases { id name }
       }
     }
   }
@@ -192,6 +192,7 @@ Deno.serve(async (req) => {
         name: `${tournament.name} — ${resolved.event.name}`,
         status: 'IN_PROGRESS',
         startgg_event_id: eventId,
+        ...(resolved.event.slug ? { startgg_slug: resolved.event.slug } : {}),
       },
       { onConflict: 'id' },
     )

@@ -8,7 +8,27 @@ import TournamentStatusBadge from '../components/TournamentStatusBadge.jsx'
 import GameCover from '../components/GameCover.jsx'
 import { useTournaments } from '../hooks/useTournaments.js'
 import { addTournamentByLink } from '../repositories/tournamentRepository.js'
-import { Trophy, Plus, Link as LinkIcon, Loader2 } from 'lucide-react'
+import { Trophy, Plus, Link as LinkIcon, Loader2, ExternalLink } from 'lucide-react'
+
+/** External "view on start.gg" affordance. Rendered as a sibling of the
+ * row's navigation Link (never nested inside it — an <a> inside another
+ * <a> is invalid HTML and breaks click/focus behavior), so a click here
+ * opens start.gg without also triggering the row's internal navigation. */
+function StartggLink({ slug }) {
+  if (!slug) return <span className="hidden sm:inline-block" />
+  return (
+    <a
+      href={`https://start.gg/${slug}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Ver torneo en start.gg"
+      title="Ver en start.gg"
+      className="hidden shrink-0 text-zinc-500 transition-colors hover:text-lime sm:inline-flex"
+    >
+      <ExternalLink size={14} aria-hidden="true" />
+    </a>
+  )
+}
 
 export default function TournamentsPage() {
   const { status, data, error } = useTournaments()
@@ -176,30 +196,35 @@ export default function TournamentsPage() {
 
       {status === 'ready' && rows.length > 0 && (
         <div className="border border-zinc-800/60">
-          <div className="hidden grid-cols-[56px_1fr_auto_auto] gap-3 border-b border-zinc-800/60 px-4 py-2.5 text-[10px] uppercase tracking-[0.16em] text-zinc-500 sm:grid">
+          <div className="hidden grid-cols-[56px_1fr_auto_auto_auto] gap-3 border-b border-zinc-800/60 px-4 py-2.5 text-[10px] uppercase tracking-[0.16em] text-zinc-500 sm:grid">
             <span>Juego</span>
             <span>Evento</span>
             <span>Estado</span>
+            <span />
             <span className="text-right">Línea</span>
           </div>
           {rows.map((tournament) => {
             const game = getGameById(tournament.game_id)
             return (
-              <Link
+              <div
                 key={tournament.id}
-                to={`/torneos/${tournament.id}`}
-                className="grid grid-cols-[56px_1fr] items-center gap-3 border-b border-zinc-800/60 px-4 py-3.5 last:border-0 bg-zinc-900/20 transition-colors duration-150 hover:bg-zinc-800/60 sm:grid-cols-[56px_1fr_auto_auto]"
+                className="grid grid-cols-[56px_1fr] items-center gap-3 border-b border-zinc-800/60 px-4 py-3.5 last:border-0 bg-zinc-900/20 transition-colors duration-150 hover:bg-zinc-800/60 sm:grid-cols-[56px_1fr_auto_auto_auto]"
               >
-                {game ? <GameCover game={game} className="h-14 w-10" /> : <span />}
-                <div className="min-w-0">
-                  <h2 className="truncate text-[14px] text-zinc-100">{tournament.name}</h2>
-                  <p className="text-[12px] text-zinc-500">{game?.shortName ?? tournament.game_id}</p>
-                </div>
-                <div className="hidden sm:block">
-                  <TournamentStatusBadge status={tournament.status} />
-                </div>
-                <span className="odds-btn hidden sm:inline-block">Abrir</span>
-              </Link>
+                <Link to={`/torneos/${tournament.id}`} className="contents">
+                  {game ? <GameCover game={game} className="h-14 w-10" /> : <span />}
+                  <div className="min-w-0">
+                    <h2 className="truncate text-[14px] text-zinc-100">{tournament.name}</h2>
+                    <p className="text-[12px] text-zinc-500">{game?.shortName ?? tournament.game_id}</p>
+                  </div>
+                  <div className="hidden sm:block">
+                    <TournamentStatusBadge status={tournament.status} />
+                  </div>
+                </Link>
+                <StartggLink slug={tournament.startgg_slug} />
+                <Link to={`/torneos/${tournament.id}`} className="odds-btn hidden sm:inline-block">
+                  Abrir
+                </Link>
+              </div>
             )
           })}
         </div>
@@ -209,30 +234,35 @@ export default function TournamentsPage() {
         <div className="mt-8 flex flex-col gap-3">
           <h2 className="font-display text-2xl font-bold uppercase text-zinc-400">Finalizados</h2>
           <div className="border border-zinc-800/60 opacity-80">
-            <div className="hidden grid-cols-[56px_1fr_auto_auto] gap-3 border-b border-zinc-800/60 px-4 py-2.5 text-[10px] uppercase tracking-[0.16em] text-zinc-500 sm:grid">
+            <div className="hidden grid-cols-[56px_1fr_auto_auto_auto] gap-3 border-b border-zinc-800/60 px-4 py-2.5 text-[10px] uppercase tracking-[0.16em] text-zinc-500 sm:grid">
               <span>Juego</span>
               <span>Evento</span>
               <span>Estado</span>
+              <span />
               <span className="text-right">Línea</span>
             </div>
             {finishedRows.map((tournament) => {
               const game = getGameById(tournament.game_id)
               return (
-                <Link
+                <div
                   key={tournament.id}
-                  to={`/torneos/${tournament.id}`}
-                  className="grid grid-cols-[56px_1fr] items-center gap-3 border-b border-zinc-800/60 px-4 py-3.5 last:border-0 bg-zinc-950/40 transition-colors duration-150 hover:bg-zinc-800/40 sm:grid-cols-[56px_1fr_auto_auto]"
+                  className="grid grid-cols-[56px_1fr] items-center gap-3 border-b border-zinc-800/60 px-4 py-3.5 last:border-0 bg-zinc-950/40 transition-colors duration-150 hover:bg-zinc-800/40 sm:grid-cols-[56px_1fr_auto_auto_auto]"
                 >
-                  {game ? <GameCover game={game} className="h-14 w-10" /> : <span />}
-                  <div className="min-w-0">
-                    <h2 className="truncate text-[14px] text-zinc-300">{tournament.name}</h2>
-                    <p className="text-[12px] text-zinc-500">{game?.shortName ?? tournament.game_id}</p>
-                  </div>
-                  <div className="hidden sm:block">
-                    <TournamentStatusBadge status={tournament.status} />
-                  </div>
-                  <span className="odds-btn hidden sm:inline-block">Ver</span>
-                </Link>
+                  <Link to={`/torneos/${tournament.id}`} className="contents">
+                    {game ? <GameCover game={game} className="h-14 w-10" /> : <span />}
+                    <div className="min-w-0">
+                      <h2 className="truncate text-[14px] text-zinc-300">{tournament.name}</h2>
+                      <p className="text-[12px] text-zinc-500">{game?.shortName ?? tournament.game_id}</p>
+                    </div>
+                    <div className="hidden sm:block">
+                      <TournamentStatusBadge status={tournament.status} />
+                    </div>
+                  </Link>
+                  <StartggLink slug={tournament.startgg_slug} />
+                  <Link to={`/torneos/${tournament.id}`} className="odds-btn hidden sm:inline-block">
+                    Ver
+                  </Link>
+                </div>
               )
             })}
           </div>

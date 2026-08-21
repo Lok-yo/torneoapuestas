@@ -26,7 +26,7 @@ function assertConfigured() {
 }
 
 const TOURNAMENT_FIELDS =
-  'id, organizer_id, game_id, format_id, name, status, version, roster_frozen_at, startgg_event_id, created_at, updated_at'
+  'id, organizer_id, game_id, format_id, name, status, version, roster_frozen_at, startgg_event_id, startgg_slug, created_at, updated_at'
 const TOURNAMENT_FIELDS_FALLBACK =
   'id, organizer_id, game_id, format_id, name, status, version, roster_frozen_at, created_at, updated_at'
 
