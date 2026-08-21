@@ -6,6 +6,8 @@ import { useI18n } from '../i18n/I18nProvider.jsx'
 import { useDisconnect } from 'wagmi'
 import { claimOrganizerRole } from '../repositories/tournamentRepository.js'
 import { FEATURE_FLAGS } from '../config/featureFlags.js'
+import { useHouseAccount } from '../lib/web3/hooks.js'
+import { formatUsdc } from '../lib/web3/format.js'
 import Avatar from './Avatar.jsx'
 
 export default function Navbar({ onToggleNav }) {
@@ -15,6 +17,7 @@ export default function Navbar({ onToggleNav }) {
   const [claiming, setClaiming] = useState(false)
   const [q, setQ] = useState('')
   const { t, lang, setLang } = useI18n()
+  const { account: houseAccount } = useHouseAccount()
 
   const isAuthenticated = status === 'authenticated' && Boolean(profile?.username)
   const isOrganizerOrAdmin = hasRole('organizer') || hasRole('admin')
@@ -115,6 +118,14 @@ export default function Navbar({ onToggleNav }) {
 
         {isAuthenticated ? (
           <>
+            {FEATURE_FLAGS.web3 && (
+              <span
+                className="hidden items-center gap-1 border border-[#2a3140] px-2.5 py-1.5 font-mono text-[12px] text-[#b6ff3a] sm:inline-flex"
+                title={t('wallet.forBetting')}
+              >
+                {formatUsdc(houseAccount.balance)} USDC
+              </span>
+            )}
             <Link
               to="/wallet"
               className="inline-flex items-center gap-1.5 border border-[#2a3140] px-3 py-1.5 text-[12px] font-semibold text-[#eef1f4] hover:border-[#b6ff3a]"

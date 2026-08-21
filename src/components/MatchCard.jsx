@@ -34,9 +34,12 @@ export default function MatchCard({ set: s, onSelect, disabled, hasMarket: dbHas
   const nameA = s.entrant_a_name ?? 'Por definir'
   const nameB = s.entrant_b_name ?? 'Por definir'
   const isCompleted = s.state === 'COMPLETED'
-  const winnerId = s.winner_startgg_id
-  const aWins = isCompleted && winnerId && s.entrant_a_startgg_id && winnerId === s.entrant_a_startgg_id
-  const bWins = isCompleted && winnerId && s.entrant_b_startgg_id && winnerId === s.entrant_b_startgg_id
+  // public_tournament_sets_view deliberately hides winner_startgg_id and
+  // entrant ids (0025_tournament_sets_and_market_set_key.sql) — it only
+  // exposes winner_name, so the winner must be matched by name here, not id.
+  const winnerName = s.winner_name
+  const aWins = isCompleted && Boolean(winnerName) && winnerName === s.entrant_a_name
+  const bWins = isCompleted && Boolean(winnerName) && winnerName === s.entrant_b_name
   const isPending = s.state === 'PENDING' || s.state === 'IN_PROGRESS'
   const canBet = !!s.entrant_a_name && !!s.entrant_b_name && s.entrant_a_name !== "Por definir" && s.entrant_b_name !== "Por definir" && isPending && !hasMarket && !disabled
 
@@ -54,14 +57,14 @@ export default function MatchCard({ set: s, onSelect, disabled, hasMarket: dbHas
         <span className={`truncate text-[13px] ${bWins ? 'font-semibold text-emerald-400' : 'text-zinc-100'}`}>
           {nameB}
         </span>
-        {isCompleted && winnerId && (
+        {isCompleted && Boolean(winnerName) && (
           <Trophy size={12} className="shrink-0 text-emerald-500" />
         )}
       </div>
       <div className="border-t border-zinc-800">
         {isCompleted && (
           <div className="px-2 py-1 text-center font-mono text-[10px] uppercase text-zinc-500">
-            Finalizado
+            {winnerName ? `Ganó ${winnerName}` : 'Finalizado'}
           </div>
         )}
         {isPending && hasMarket && (

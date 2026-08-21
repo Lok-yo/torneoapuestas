@@ -81,6 +81,7 @@ export async function fetchOnchainBets(address, accountId) {
 
   const pid = housePlayerId(address, accountId)
   const openStake = {}
+  const claimedByQuestion = {}
   if (pid && isHouseConfigured) {
     const uniqueQ = [...new Set(fromHouse.map((b) => b.questionId))]
     await Promise.all(
@@ -104,6 +105,21 @@ export async function fetchOnchainBets(address, accountId) {
         } catch {
           openStake[questionId] = null
         }
+        // Market-wide flag: claim() pays every bettor on this market in
+        // one call and never zeroes userStake, so "claimed" and
+        // "cancelled" (stake -> 0) are two independent signals — a
+        // claimed bet's stake stays as-is, only `claimed[questionId]`
+        // flips. See contracts/src/HouseBank.sol claim()/claimed mapping.
+        try {
+          claimedByQuestion[questionId] = await client.readContract({
+            address: HOUSE_BANK_ADDRESS,
+            abi: HOUSE_BANK_ABI,
+            functionName: 'claimed',
+            args: [questionId],
+          })
+        } catch {
+          claimedByQuestion[questionId] = false
+        }
       }),
     )
   }
@@ -114,6 +130,7 @@ export async function fetchOnchainBets(address, accountId) {
       const placedAt = times[bet.blockNumber.toString()] || 0
       const placedAtSec = placedAt > 0 ? placedAt / 1000 : 0
       const cancelled = openStake[bet.questionId] === 0n
+      const claimed = Boolean(claimedByQuestion[bet.questionId])
       if (cancelled) expireCancelWindow(bet.txHash)
       const chainLeft = cancelled || !placedAtSec
         ? 0
@@ -123,6 +140,7 @@ export async function fetchOnchainBets(address, accountId) {
         ...bet,
         placedAt,
         cancelled,
+        claimed,
         cancelAmount: remaining > 0 ? bet.investmentAmount : 0n,
         cancelDeadline: fetchedAt + remaining,
         cancelRemainingMs: remaining,

@@ -239,7 +239,8 @@ export default function OnchainWalletView() {
             {bets.slice(0, 6).map((bet) => {
               const leftMs = Math.max(0, (bet.cancelRemainingMs ?? 0) - (now - (bet.fetchedAt || now)))
               const cancelled = Boolean(bet.cancelled)
-              const canCash = !cancelled && leftMs > 0
+              const settled = Boolean(bet.claimed)
+              const canCash = !cancelled && !settled && leftMs > 0
               const left = formatCountdown(leftMs)
               return (
                 <li key={bet.txHash} className="border-b border-zinc-800 last:border-0">
@@ -252,9 +253,11 @@ export default function OnchainWalletView() {
                       <p className="mt-0.5 text-[11px] text-zinc-600">
                         {cancelled
                           ? t('wallet.cashOutReturned')
-                          : canCash
-                            ? t('wallet.cashOutLeft', { time: left })
-                            : t('wallet.cashOutLocked')}
+                          : settled
+                            ? t('wallet.cashOutSettled')
+                            : canCash
+                              ? t('wallet.cashOutLeft', { time: left })
+                              : t('wallet.cashOutLocked')}
                       </p>
                     </Link>
                     <div className="flex shrink-0 items-center gap-3">

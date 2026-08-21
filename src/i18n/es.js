@@ -55,6 +55,7 @@ export const es = {
     cashOutHint: 'Tienes 10 minutos para cancelar la apuesta y recuperar tu USDC. Después se queda en el partido.',
     cashOutLeft: 'Te quedan {time} para cancelar esta apuesta.',
     cashOutLocked: 'Ya pasaron 10 min. Esta apuesta está bloqueada hasta que termine el partido.',
+    cashOutSettled: 'Partido terminado — ya se liquidó. Revisá tus ganancias arriba.',
     cashOutDone: 'Apuesta cancelada. El USDC volvió a tu saldo.',
     cashOutReturned: 'Cancelada — USDC devuelto a tu saldo.',
     depositKicker: 'Depósito',

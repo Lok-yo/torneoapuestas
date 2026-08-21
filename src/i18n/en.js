@@ -55,6 +55,7 @@ export const en = {
     cashOutHint: 'You have 10 minutes to cancel the bet and recover your USDC. After that it stays on the match.',
     cashOutLeft: '{time} left to cancel this bet.',
     cashOutLocked: '10 minutes passed. This bet stays on the match.',
+    cashOutSettled: 'Match finished — already settled. Check your winnings above.',
     cashOutDone: 'Bet cancelled. USDC returned to your balance.',
     cashOutReturned: 'Cancelled — USDC returned to your balance.',
     depositKicker: 'Deposit',

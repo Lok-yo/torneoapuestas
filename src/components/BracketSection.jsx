@@ -47,7 +47,16 @@ export default function BracketSection({ tournamentId, sets, onSelectSet, disabl
         {/* Winners Bracket */}
         <div className="flex min-w-max snap-x snap-mandatory gap-6">
           {winnersRounds.map((round, idx) => {
-            const matchSets = sets.filter((s) => s.round === round)
+            // Explicit, stable order by startgg_set_id (permanent, assigned
+            // once when start.gg creates the set) — NOT by `slot`, which
+            // the poller recomputes fresh every poll from whatever order
+            // that cycle's API response happened to return (sets.ts
+            // nextSlot()), so it can reshuffle sibling matches within a
+            // round as other matches change state. This doesn't reproduce
+            // start.gg's own seed-pairing layout (no seed data is stored),
+            // but it guarantees a match never visually moves once it has
+            // rendered in a position.
+            const matchSets = sets.filter((s) => s.round === round).sort((a, b) => a.startgg_set_id - b.startgg_set_id)
             return (
               <div key={round} className="flex min-w-[220px] snap-start flex-col">
                 <h2 className="mb-2 font-display text-[12px] font-bold uppercase tracking-[0.14em] text-zinc-500">
@@ -76,7 +85,16 @@ export default function BracketSection({ tournamentId, sets, onSelectSet, disabl
         {losersRounds.length > 0 && (
           <div className="flex min-w-max snap-x snap-mandatory gap-6">
             {losersRounds.map((round, idx) => {
-              const matchSets = sets.filter((s) => s.round === round)
+              // Explicit, stable order by startgg_set_id (permanent, assigned
+            // once when start.gg creates the set) — NOT by `slot`, which
+            // the poller recomputes fresh every poll from whatever order
+            // that cycle's API response happened to return (sets.ts
+            // nextSlot()), so it can reshuffle sibling matches within a
+            // round as other matches change state. This doesn't reproduce
+            // start.gg's own seed-pairing layout (no seed data is stored),
+            // but it guarantees a match never visually moves once it has
+            // rendered in a position.
+            const matchSets = sets.filter((s) => s.round === round).sort((a, b) => a.startgg_set_id - b.startgg_set_id)
               return (
                 <div key={round} className="flex min-w-[220px] snap-start flex-col">
                   <h2 className="mb-2 font-display text-[12px] font-bold uppercase tracking-[0.14em] text-zinc-500">
