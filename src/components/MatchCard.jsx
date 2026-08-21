@@ -3,6 +3,7 @@ import { Trophy, TrendingUp } from 'lucide-react'
 import { useMarket } from '../lib/web3/hooks.js'
 import { useMemo } from 'react'
 import { matchQuestionId } from '../lib/web3/questionId.js'
+import { useI18n } from '../i18n/I18nProvider.jsx'
 
 
 const STATE_LABEL = {
@@ -20,6 +21,7 @@ const STATE_STYLE = {
 }
 
 export default function MatchCard({ set: s, onSelect, disabled, hasMarket: dbHasMarket }) {
+  const { t } = useI18n()
   const questionId = useMemo(() => {
     if (!s.startgg_event_id || !s.startgg_set_id) return null
     return matchQuestionId(s.startgg_event_id, s.startgg_set_id)
@@ -81,8 +83,11 @@ export default function MatchCard({ set: s, onSelect, disabled, hasMarket: dbHas
           </button>
         )}
         {isPending && !hasMarket && !canBet && (
-          <div className="px-2 py-1 text-center font-mono text-[10px] uppercase text-zinc-600">
-            {disabled ? '—' : 'Esperando rival'}
+          <div
+            title={t('match.waitingPlayers')}
+            className="px-2 py-1 text-center font-mono text-[10px] uppercase text-zinc-600"
+          >
+            {disabled ? '—' : t('match.waitingPlayers')}
           </div>
         )}
       </div>

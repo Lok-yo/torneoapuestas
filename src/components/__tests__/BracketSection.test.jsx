@@ -42,3 +42,33 @@ describe('BracketSection round grouping', () => {
     expect(screen.getByText(/Aún no hay TOP 8/)).toBeDefined()
   })
 })
+
+describe('BracketSection Losers bracket (negative rounds)', () => {
+  it('renders a round=-1 set as "Losers Finals" in its own Losers column', () => {
+    const losersSets = [
+      { startgg_set_id: 30, tournament_id: 't1', round: -1, slot: 1, state: 'PENDING', entrant_a_name: 'Echo', entrant_b_name: 'Foxtrot', has_market: false },
+      { startgg_set_id: 31, tournament_id: 't1', round: 1, slot: 1, state: 'PENDING', entrant_a_name: 'Golf', entrant_b_name: 'Hotel', has_market: false },
+    ]
+    render(<BracketSection tournamentId="t1" sets={losersSets} />)
+
+    expect(screen.getByText('Losers Finals')).toBeDefined()
+    // Winners label must not be duplicated onto the Losers column
+    const headings = screen.getAllByRole('heading').map((h) => h.textContent)
+    expect(headings).toContain('Losers Finals')
+    expect(headings.filter((h) => h === 'Losers Finals')).toHaveLength(1)
+  })
+
+  it('renders deeper losers rounds with their labels (-2 as "Losers Semis")', () => {
+    const doubleElim = [
+      { startgg_set_id: 40, tournament_id: 't1', round: -2, slot: 1, state: 'PENDING', entrant_a_name: 'India', entrant_b_name: 'Juliet', has_market: false },
+      { startgg_set_id: 41, tournament_id: 't1', round: -1, slot: 1, state: 'PENDING', entrant_a_name: 'Kilo', entrant_b_name: 'Lima', has_market: false },
+    ]
+    render(<BracketSection tournamentId="t1" sets={doubleElim} />)
+
+    expect(screen.getByText('Losers Finals')).toBeDefined()
+    expect(screen.getByText('Losers Semis')).toBeDefined()
+    // Both entrants render inside their Losers columns
+    expect(screen.getByText('Kilo')).toBeDefined()
+    expect(screen.getByText('India')).toBeDefined()
+  })
+})
