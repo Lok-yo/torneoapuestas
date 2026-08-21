@@ -1,7 +1,9 @@
+import { isDemoAnvil } from './runtime.js'
+
 /** True when the Vite client is pointed at a local Anvil node. */
 export function isLocalAnvil() {
   const rpc = String(import.meta.env.VITE_AMOY_RPC_URL || '')
-  return rpc.includes('127.0.0.1') || rpc.includes('localhost')
+  return isDemoAnvil(import.meta.env, rpc)
 }
 
 async function postAnvil(path, body) {

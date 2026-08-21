@@ -8,9 +8,11 @@ import { createConfig, http } from 'wagmi'
 import { defineChain } from 'viem'
 import { polygonAmoy } from 'wagmi/chains'
 import { injected, walletConnect } from 'wagmi/connectors'
+import { isDemoAnvil, resolveBrowserRpcUrl } from './runtime.js'
 
-const rpc = import.meta.env.VITE_AMOY_RPC_URL || polygonAmoy.rpcUrls.default.http[0]
-const isLocalRpc = rpc.includes('127.0.0.1') || rpc.includes('localhost')
+const rawRpc = import.meta.env.VITE_AMOY_RPC_URL || polygonAmoy.rpcUrls.default.http[0]
+const rpc = resolveBrowserRpcUrl(rawRpc, globalThis.location?.origin)
+const demoMode = isDemoAnvil(import.meta.env, rpc)
 
 /** Same chain id as Polygon Amoy (80002), with the RPC this app actually uses. */
 export const appChain = defineChain({
@@ -27,7 +29,7 @@ export const appChain = defineChain({
 const walletConnectProjectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
 
 const connectors = [injected({ shimDisconnect: true })]
-if (!isLocalRpc && walletConnectProjectId) {
+if (!demoMode && walletConnectProjectId) {
   connectors.push(walletConnect({ projectId: walletConnectProjectId }))
 }
 
@@ -43,8 +45,8 @@ export const wagmiConfig = createConfig({
 export const AMOY_CHAIN_ID = appChain.id
 export const AMOY_RPC_URL = rpc
 export const AMOY_ADD_CHAIN = {
-  chainName: isLocalRpc ? 'COLISEUM Local' : 'Polygon Amoy',
+  chainName: demoMode ? 'COLISEUM Local' : 'Polygon Amoy',
   nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
   rpcUrls: [rpc],
-  blockExplorerUrls: isLocalRpc ? [] : ['https://amoy.polygonscan.com'],
+  blockExplorerUrls: demoMode ? [] : ['https://amoy.polygonscan.com'],
 }

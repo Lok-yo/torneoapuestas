@@ -1,10 +1,11 @@
 import { createWalletClient, createPublicClient, http, parseAbi, encodeFunctionData, recoverMessageAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { polygonAmoy } from 'viem/chains'
-import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { loadEnvLocal } from './scripts/_env.mjs'
+import { isDemoAnvil, resolveInternalRpcUrl } from './src/lib/web3/runtime.js'
 
-const FALLBACK_ANVIL_RPC = 'http://127.0.0.1:8545'
 const FALLBACK_ANVIL_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
 
 const FACTORY_ABI = parseAbi([
@@ -28,21 +29,6 @@ const DEAD = '0x000000000000000000000000000000000000dEaD'
 const STARTING_USDC = 250n * 1_000_000n
 const STARTING_POL_HEX = '0x1bc16d674ec80000' // 2 ETH/POL for gas
 
-function loadEnvLocal(root) {
-  const env = {}
-  try {
-    const raw = readFileSync(resolve(root, '.env.local'), 'utf8')
-    for (const line of raw.split(/\r?\n/)) {
-      if (!line || line.startsWith('#') || !line.includes('=')) continue
-      const i = line.indexOf('=')
-      env[line.slice(0, i).trim()] = line.slice(i + 1).trim()
-    }
-  } catch {
-    // no .env.local yet
-  }
-  return env
-}
-
 function json(res, status, body) {
   res.statusCode = status
   res.setHeader('content-type', 'application/json')
@@ -59,19 +45,11 @@ async function readBody(req) {
   }
 }
 
-function rpcUrl(env) {
-  return env.VITE_AMOY_RPC_URL || env.AMOY_RPC_URL || FALLBACK_ANVIL_RPC
-}
-
-function isLocalRpc(url) {
-  return url.includes('127.0.0.1') || url.includes('localhost')
-}
-
 function deployerKey(env, url) {
   // Local Anvil's owner is always the default account 0. The Amoy key in
   // .env.local is not the MarketFactory owner on 127.0.0.1 and register
   // reverts NotOwner — which MetaMask surfaces as an empty execution revert.
-  if (isLocalRpc(url || rpcUrl(env))) return FALLBACK_ANVIL_KEY
+  if (isDemoAnvil(env, url || resolveInternalRpcUrl(env))) return FALLBACK_ANVIL_KEY
   const key = env.DEPLOYER_PRIVATE_KEY || FALLBACK_ANVIL_KEY
   return key.startsWith('0x') ? key : `0x${key}`
 }
@@ -148,7 +126,7 @@ async function impersonateSend(url, user, to, data, gas = '0x1e8480') {
 }
 
 function clients(env) {
-  const url = rpcUrl(env)
+  const url = resolveInternalRpcUrl(env)
   const account = privateKeyToAccount(deployerKey(env, url))
   const transport = http(url)
   return {
@@ -162,14 +140,14 @@ function clients(env) {
 async function handleAnvil(req, res, root) {
   if (req.method !== 'POST') return json(res, 405, { error: 'POST only' })
 
-  const env = loadEnvLocal(root)
+  const env = loadEnvLocal(pathToFileURL(resolve(root, '.env.local')), process.env)
   const factory = env.VITE_MARKET_FACTORY_ADDRESS
   const usdc = env.VITE_USDC_ADDRESS
   const path = req.url.replace('/__anvil/', '').split('?')[0]
 
   const body = await readBody(req)
   const { walletClient, publicClient, rpcUrl: url } = clients(env)
-  const local = isLocalRpc(url)
+  const local = isDemoAnvil(env, url)
 
   if (path === 'status') {
     const id = await rpc(url, 'eth_chainId', [])

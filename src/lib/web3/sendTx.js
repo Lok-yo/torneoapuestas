@@ -1,6 +1,6 @@
 import { getAccount, getTransactionCount, waitForTransactionReceipt, getBlockNumber } from 'wagmi/actions'
 import { decodeErrorResult, encodeFunctionData } from 'viem'
-import { wagmiConfig, AMOY_CHAIN_ID } from './client.js'
+import { wagmiConfig, AMOY_CHAIN_ID, AMOY_RPC_URL } from './client.js'
 import { MARKET_FACTORY_ADDRESS, HOUSE_BANK_ADDRESS, MARKET_FACTORY_ABI, HOUSE_BANK_ABI, ERC20_ABI } from './contracts.js'
 
 const DECODE_ABIS = [...MARKET_FACTORY_ABI, ...HOUSE_BANK_ABI, ...ERC20_ABI]
@@ -101,14 +101,14 @@ export async function assertWalletSeesContracts() {
   }
   if (!factoryCode || factoryCode === '0x' || !houseCode || houseCode === '0x') {
     throw new Error(
-      'MetaMask no ve los contratos locales. En MetaMask: Networks → la red 80002 → editar RPC a http://127.0.0.1:8545',
+      `MetaMask no ve los contratos locales. En MetaMask: Networks → la red 80002 → editar RPC a ${AMOY_RPC_URL}`,
     )
   }
   const mmBlock = Number(blockHex)
   const appBlock = Number(await getBlockNumber(wagmiConfig))
   if (Number.isFinite(mmBlock) && Number.isFinite(appBlock) && Math.abs(mmBlock - appBlock) > 40) {
     throw new Error(
-      `MetaMask está en otro nodo (bloque ${mmBlock} vs Anvil ${appBlock}). Pon RPC http://127.0.0.1:8545`,
+      `MetaMask está en otro nodo (bloque ${mmBlock} vs Anvil ${appBlock}). Pon RPC ${AMOY_RPC_URL}`,
     )
   }
 }

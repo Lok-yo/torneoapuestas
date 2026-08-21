@@ -23,14 +23,28 @@ function withTempEnvFile(contents, run) {
 
 describe('loadEnvLocal', () => {
   it('parses KEY=VALUE lines, skipping comments and blank lines', () => {
-    const env = withTempEnvFile('# a comment\nFOO=bar\n\nBAZ=qux=extra\n', (url) => loadEnvLocal(url))
+    const env = withTempEnvFile('# a comment\nFOO=bar\n\nBAZ=qux=extra\n', (url) => loadEnvLocal(url, {}))
 
     expect(env).toEqual({ FOO: 'bar', BAZ: 'qux=extra' })
   })
 
   it('trims surrounding whitespace from both the key and the value', () => {
-    const env = withTempEnvFile('  SPACED  =  value with spaces  \n', (url) => loadEnvLocal(url))
+    const env = withTempEnvFile('  SPACED  =  value with spaces  \n', (url) => loadEnvLocal(url, {}))
 
     expect(env).toEqual({ SPACED: 'value with spaces' })
+  })
+
+  it('uses runtime variables when the local file is absent', () => {
+    const missing = pathToFileURL(join(tmpdir(), 'gg2-env-does-not-exist'))
+    expect(loadEnvLocal(missing, { VITE_AMOY_RPC_URL: 'http://anvil:8545' })).toEqual({
+      VITE_AMOY_RPC_URL: 'http://anvil:8545',
+    })
+  })
+
+  it('lets runtime variables override file values', () => {
+    const env = withTempEnvFile('RPC=file\nKEEP=file\n', (url) =>
+      loadEnvLocal(url, { RPC: 'runtime' }),
+    )
+    expect(env).toEqual({ RPC: 'runtime', KEEP: 'file' })
   })
 })
