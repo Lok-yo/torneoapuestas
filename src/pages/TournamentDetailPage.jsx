@@ -7,7 +7,7 @@
 // a UX affordance only — the database grants and RPCs remain the real
 // authority, so a hidden/disabled control here is never itself a security
 // boundary. See tasks.md 3.13 and tournament-operations spec.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, Link, Navigate } from 'react-router-dom'
 import { ArrowLeft, Users, Swords } from 'lucide-react'
 import { getTournament, getTournamentFormat, listTournamentSets } from '../repositories/tournamentRepository.js'
@@ -33,6 +33,7 @@ export default function TournamentDetailPage() {
   const [state, setState] = useState({ status: 'loading', tournament: null, format: null, sets: [], error: null })
   const [tab, setTab] = useState('descripcion')
   const [selectedSet, setSelectedSet] = useState(null)
+  const intervalRef = useRef(null)
 
   const load = useCallback(async () => {
     try {
@@ -46,6 +47,12 @@ export default function TournamentDetailPage() {
         listTournamentSets(tournament.id).catch(() => []),
       ])
       setState({ status: 'ready', tournament, format, sets, error: null })
+      // A finished tournament no longer changes: stop the 30s refresh so
+      // we never refetch a settled bracket (tasks.md 3.2).
+      if (tournament.status === 'COMPLETED' && intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
     } catch (rawError) {
       setState({ status: 'error', tournament: null, format: null, sets: [], error: toAppError(rawError) })
     }
@@ -53,8 +60,11 @@ export default function TournamentDetailPage() {
 
   useEffect(() => {
     load()
-    const timer = setInterval(load, 30000)
-    return () => clearInterval(timer)
+    intervalRef.current = setInterval(load, 30000)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
   }, [load])
 
   if (state.status === 'not_found') return <Navigate to="/torneos" replace />
