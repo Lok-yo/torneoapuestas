@@ -1,0 +1,33 @@
+.git
+.codegraph
+.atl
+
+# Runtime configuration and secrets stay outside image layers.
+.env
+.env.*
+!.env.example
+!.env.demo.example
+
+# Local dependencies and generated application artifacts.
+node_modules
+dist
+coverage
+playwright-report
+test-results
+.playwright
+
+# Logs and local backup archives.
+logs
+*.log
+backups
+*.bak
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+
+# Foundry dependencies and generated artifacts are rebuilt in the image.
+contracts/lib
+contracts/out
+contracts/cache
+contracts/broadcast

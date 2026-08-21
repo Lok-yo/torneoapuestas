@@ -1,0 +1,111 @@
+services:
+  anvil:
+    build:
+      context: .
+      target: anvil
+    command:
+      - --chain-id
+      - "80002"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8545"
+      - --block-time
+      - "1"
+      - --accounts
+      - "10"
+      - --state
+      - /demo-state/anvil-state.json
+      - --state-interval
+      - "1"
+    volumes:
+      - demo-state:/demo-state
+    networks: [demo-backend]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "cast", "chain-id", "--rpc-url", "http://127.0.0.1:8545"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  bootstrap:
+    build: .
+    entrypoint: ["node", "scripts/demo-bootstrap.mjs"]
+    environment:
+      ANVIL_RPC_URL: http://anvil:8545
+      DEMO_STATE_DIR: /demo-state
+    volumes:
+      - demo-state:/demo-state
+    networks: [default, demo-backend]
+    depends_on:
+      anvil:
+        condition: service_healthy
+    restart: "no"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  app:
+    build: .
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      APP_HOST: ${APP_HOST:?APP_HOST is required}
+      DEMO_MANIFEST: public.env
+      ANVIL_RPC_URL: http://anvil:8545
+      VITE_AMOY_RPC_URL: /rpc
+      VITE_DEMO_ANVIL: "true"
+      VITE_FEATURE_WEB3: "true"
+      VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?VITE_SUPABASE_URL is required}
+      VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:?VITE_SUPABASE_ANON_KEY is required}
+    ports:
+      - "127.0.0.1:${APP_PORT:?APP_PORT is required}:3000"
+    volumes:
+      - demo-state:/demo-state:ro
+    networks: [default, demo-backend]
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/__anvil/status',{method:'POST'}).then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  settlement:
+    build: .
+    command: ["npm", "run", "settle:loop"]
+    environment:
+      NODE_ENV: production
+      DEMO_MANIFEST: settlement.env
+      ANVIL_RPC_URL: http://anvil:8545
+      VITE_AMOY_RPC_URL: http://anvil:8545
+      VITE_DEMO_ANVIL: "true"
+      VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?VITE_SUPABASE_URL is required}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?SUPABASE_SERVICE_ROLE_KEY is required}
+      SETTLEMENT_INTERVAL_MS: "15000"
+    volumes:
+      - demo-state:/demo-state:ro
+    networks: [default, demo-backend]
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+volumes:
+  demo-state:
+    name: gg2-demo-state
+
+networks:
+  demo-backend:
+    internal: true

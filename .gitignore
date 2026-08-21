@@ -27,7 +27,11 @@ dist-ssr
 # Environment secrets
 .env
 .env.local
+.env.demo
 .env.*.local
+
+# Local deployment backups
+backups/
 
 # Supabase local runtime
 supabase/.branches
