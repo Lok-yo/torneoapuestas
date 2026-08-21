@@ -3,30 +3,30 @@ schema: spec-driven
 project: gg2
 execution_mode: auto
 artifact_store:
-  mode: openspec
-delivery_strategy: single-pr
-review_budget_lines: 1000
-strict_tdd: false
+  mode: engram
+delivery_strategy: auto-chain
+review_budget_lines: 20000
+strict_tdd: true
 
 context: |
   Stack: React 19 SPA using Vite 8, JavaScript/JSX, React Router 7, Zustand 5, Recharts, and Tailwind CSS 4.
   Architecture: Route-based page components under src/pages, shared UI under src/components, layouts, static data, and persisted Zustand stores.
   Conventions: ES modules, function components, named stores, feature-oriented folders, and existing Spanish product copy.
-  Testing: No test runner or test files detected; lint and production build are available.
+  Testing: Vitest unit/integration suite under src (jsdom); Deno tests for supabase/functions edge functions; Playwright owns e2e/.
 
 testing:
-  strict_tdd: false
+  strict_tdd: true
   runner:
-    available: false
-    command: null
-    framework: null
+    available: true
+    command: npm run test
+    framework: vitest
   layers:
-    unit: false
-    integration: false
+    unit: true
+    integration: true
     e2e: false
   coverage:
-    available: false
-    command: null
+    available: true
+    command: npm run test -- --coverage
   quality:
     linter:
       available: true
@@ -55,12 +55,12 @@ rules:
   apply:
     guidelines:
       - Follow existing React, Zustand, and folder conventions.
-    tdd: false
-    test_command: null
+    tdd: true
+    test_command: npm run test
   verify:
-    test_command: null
+    test_command: npm run test
     build_command: npm run build
     lint_command: npm run lint
-    coverage_threshold: 0
+    coverage_threshold: 60
   archive:
     - Warn before merging destructive deltas.
