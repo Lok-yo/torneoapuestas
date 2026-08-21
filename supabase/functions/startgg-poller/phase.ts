@@ -62,7 +62,11 @@ export function pickPhase(phases: StartggPhase[] | null | undefined): StartggPha
     }))
     .filter((candidate) => candidate.score > 0)
 
-  if (candidates.length === 0) return null
+  if (candidates.length === 0) {
+    // Fallback absoluto: si ninguna fase coincide con las palabras clave,
+    // tomamos la última fase de la lista (suele ser el bracket final).
+    return normalized[normalized.length - 1]?.phase ?? null
+  }
 
   candidates.sort(
     (a, b) =>

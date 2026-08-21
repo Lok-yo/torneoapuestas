@@ -43,5 +43,15 @@ export function buildUnionWork(
     })
   }
 
+  // Dar prioridad VIP a los torneos trackeados manualmente o que necesitan fetch,
+  // para evitar inanición por el límite de presupuesto (Rate Limit).
+  result.sort((a, b) => {
+    if (a.source === 'tracked' && b.source !== 'tracked') return -1
+    if (b.source === 'tracked' && a.source !== 'tracked') return 1
+    if (a.needsEventFetch && !b.needsEventFetch) return -1
+    if (b.needsEventFetch && !a.needsEventFetch) return 1
+    return 0
+  })
+
   return result
 }

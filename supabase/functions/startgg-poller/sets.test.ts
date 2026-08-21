@@ -5,7 +5,7 @@
 // design.md "Question ID and Resolution Contract" and tasks.md 2.3/2.4.
 
 import { assertEquals, assertRejects } from 'jsr:@std/assert@1'
-import { buildSetRow, epochToIso, nextSlot, processSet, type StartggSet, type TournamentSetRow } from './sets.ts'
+import { buildSetRow, epochToIso, isPreviewSet, nextSlot, processSet, type StartggSet, type TournamentSetRow } from './sets.ts'
 
 const COMPLETED_SET: StartggSet = {
   id: '9001',
@@ -122,6 +122,15 @@ Deno.test('nextSlot: assigns per-round ordinals across pagination pages', () => 
   assertEquals(nextSlot(counters, 1), 1)
   assertEquals(nextSlot(counters, 2), 0)
   assertEquals(nextSlot(counters, 1), 2)
+})
+
+Deno.test('isPreviewSet: true for unseeded future-round placeholder ids, false for real ids', () => {
+  assertEquals(isPreviewSet('preview_3426989_1_0'), true)
+  assertEquals(isPreviewSet('preview_3426989_-4_1'), true)
+  assertEquals(isPreviewSet('9001'), false)
+  // A real set's id comes back from the API as a number, not a string —
+  // must not throw (regression: `.startsWith` on a number crashed the cycle).
+  assertEquals(isPreviewSet(9001), false)
 })
 
 Deno.test('epochToIso: null stays null, ms converts to ISO', () => {

@@ -43,6 +43,19 @@ export interface TournamentSetRow {
   completed_at: string | null
 }
 
+/**
+ * True for start.gg's synthetic "preview_..." set ids: placeholder
+ * future-round slots in a bracket that hasn't been seeded/played yet
+ * (no entrants determined, state PENDING). These carry no real numeric
+ * id — `Number(id)` is NaN — and `startgg_set_id` is NOT NULL, so the
+ * poller must skip them rather than attempt an insert. A real set's id
+ * comes back from the API as a number, not a string, so this must
+ * tolerate both shapes instead of assuming `.startsWith` exists.
+ */
+export function isPreviewSet(id: unknown): boolean {
+  return typeof id === 'string' && id.startsWith('preview_')
+}
+
 /** start.gg timestamps are epoch milliseconds; tournament_sets uses
  * timestamptz (ISO). Null stays null (future/bye sets have no times). */
 export function epochToIso(ms: number | null): string | null {

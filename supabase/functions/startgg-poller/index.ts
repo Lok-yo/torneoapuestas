@@ -18,10 +18,10 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { log, newRequestId } from '../_shared/log.js'
-import { computeBackoffUntil, CycleBudget, isBackingOff, laneForCycle, partitionByBudget } from './backoff.ts'
+import { computeBackoffUntil, CycleBudget, isBackingOff, laneForCycle } from './backoff.ts'
 import { allSetsCompleted, pickPhase } from './phase.ts'
-import { buildSetRow, nextSlot, processSet } from './sets.ts'
-import { buildUnionWork } from './union.ts'
+import { buildSetRow, isPreviewSet, nextSlot, processSet } from './sets.ts'
+import { buildUnionWork, UnionWorkItem } from './union.ts'
 
 const STARTGG_GRAPHQL_URL = 'https://api.start.gg/gql/alpha'
 const SOURCE_KEY = 'startgg-mx-poller'
@@ -49,6 +49,7 @@ interface StartggVideogame {
 
 interface StartggEvent {
   id: string
+  slug?: string | null
   startAt: number | null
   videogame?: StartggVideogame
   phases?: { nodes: StartggPhase[] }
@@ -103,6 +104,7 @@ const MX_TOURNAMENTS_QUERY = /* GraphQL */ `
         events {
           id
           name
+          slug
           startAt
           videogame { id }
           phases {
@@ -120,6 +122,7 @@ const EVENT_BY_ID_QUERY = /* GraphQL */ `
     event(id: $id) {
       id
       name
+      slug
       startAt
       videogame { id }
       tournament {
@@ -202,6 +205,95 @@ async function deterministicUuid(seed: string): Promise<string> {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
 }
 
+interface IngestResult {
+  ingestedSets: number
+  skipped: boolean
+  unsupportedGame: boolean
+}
+
+/** Ingests one event: game-mapping check, tournament upsert, TOP-8 phase
+ * pick, paginated set fetch/upsert, and completion status flip. Shared
+ * by the tracked mini-cycle and the MX loop so both paths ingest
+ * identically — no drift between "how a tracked event is ingested" and
+ * "how an MX event is ingested". */
+async function ingestEvent(params: {
+  // deno-lint-ignore no-explicit-any
+  supabase: any
+  startggToken: string
+  budget: CycleBudget
+  requestId: string
+  // deno-lint-ignore no-explicit-any
+  event: any
+  tournamentName: string
+}): Promise<IngestResult> {
+  const { supabase, startggToken, budget, requestId, event, tournamentName } = params
+
+  const gameId = event.videogame?.id
+  const mapping = gameId != null ? STARTGG_GAME_TO_GG_GAME[gameId] : undefined
+  if (!mapping) {
+    log.info({ requestId, event: 'startgg_poller.unsupported_game', eventId: event.id, videogameId: gameId, tournamentName })
+    return { ingestedSets: 0, skipped: false, unsupportedGame: true }
+  }
+
+  const tournamentId = await deterministicUuid(`startgg-event:${event.id}`)
+  await supabase.from('tournaments').upsert(
+    {
+      id: tournamentId,
+      organizer_id: Deno.env.get('STARTGG_SHADOW_ORGANIZER_ID'),
+      game_id: mapping.game_id,
+      format_id: mapping.format_id,
+      name: `${tournamentName} — ${event.name}`,
+      status: 'IN_PROGRESS',
+      ...(event.id ? { startgg_event_id: Number(event.id) } : {}),
+      ...(event.slug ? { startgg_slug: event.slug } : {}),
+    },
+    { onConflict: 'id', ignoreDuplicates: false },
+  )
+
+  const phases = Array.isArray(event.phases) ? event.phases : event.phases?.nodes ?? []
+  const phase = pickPhase(phases)
+  if (!phase) {
+    log.info({ requestId, event: 'startgg_poller.phase_skipped', eventId: event.id })
+    return { ingestedSets: 0, skipped: true, unsupportedGame: false }
+  }
+
+  const phaseSets = await fetchPhaseSets(startggToken, phase.id, budget, requestId)
+  const eventSets: StartggSet[] = []
+  const roundCounters = new Map<number, number>()
+  let hasSetIngestError = false
+  let ingestedSets = 0
+
+  for (const set of phaseSets) {
+    if (isPreviewSet(set.id)) continue // unseeded future-round placeholder — nothing real to ingest yet
+    try {
+      const row = buildSetRow({
+        tournamentId,
+        eventId: Number(event.id),
+        phaseId: Number(phase.id),
+        phaseName: phase.name,
+        eventStartsAt: event.startAt,
+        set,
+        slot: nextSlot(roundCounters, set.round),
+      })
+      await processSet(supabase, row)
+      eventSets.push(set)
+      ingestedSets++
+    } catch (err) {
+      hasSetIngestError = true
+      log.error({ requestId, event: 'startgg_poller.set_ingest_failed', setId: set.id, message: String(err) })
+    }
+  }
+
+  if (!hasSetIngestError && eventSets.length > 0 && allSetsCompleted(eventSets)) {
+    await supabase.from('tournaments').update({ status: 'COMPLETED' }).eq('id', tournamentId)
+
+    // Mueve a finalizados automáticamente si es un torneo trackeado
+    await supabase.from('tracked_tournaments').update({ list: 'finalizados' }).eq('tournament_id', tournamentId)
+  }
+
+  return { ingestedSets, skipped: false, unsupportedGame: false }
+}
+
 Deno.serve(async (req) => {
   const requestId = newRequestId()
 
@@ -241,108 +333,94 @@ Deno.serve(async (req) => {
   const lanes = laneForCycle(cycleIndex)
   log.info({ requestId, event: 'startgg_poller.cycle_start', lanes, cycleIndex })
 
-  budget.tryConsume(1)
-  const result = await startggGraphQL(MX_TOURNAMENTS_QUERY, { perPage: 25 }, startggToken)
-
-  if (!result.ok) {
-    if (result.status === 429) {
-      const backoffUntil = computeBackoffUntil({ isRateLimited: true, retryAfterSeconds: result.retryAfterSeconds })
-      await supabase.from('startgg_ingestion_cursor').upsert({
-        source_key: SOURCE_KEY,
-        last_polled_at: new Date().toISOString(),
-        last_completed_at: cursor.last_completed_at,
-        backoff_until: backoffUntil?.toISOString() ?? null,
-        cycle_requests: 0,
-      })
-      log.warn({ requestId, event: 'startgg_poller.rate_limited', backoffUntil: backoffUntil?.toISOString() })
-      return new Response(JSON.stringify({ status: 'rate_limited', backoffUntil: backoffUntil?.toISOString() }), { status: 200 })
-    }
-    log.error({ requestId, event: 'startgg_poller.upstream_error', status: result.status })
-    return new Response(JSON.stringify({ error: 'UNAVAILABLE' }), { status: 503 })
-  }
-
-  const tournaments = ((result.data as { tournaments?: { nodes?: StartggTournament[] } })?.tournaments?.nodes ?? []).filter(
-    (t) => t.countryCode === 'MX', // belt-and-suspenders: server-side filter already applied, re-checked here (spec "Non-MX tournament excluded")
-  )
-
   const { data: trackedRows } = await supabase.from('tracked_tournaments').select('startgg_event_id')
-  const trackedEvents = (trackedRows ?? []).map((r) => ({ startgg_event_id: Number(r.startgg_event_id) }))
+  const trackedEventIds = (trackedRows ?? []).map((r) => Number(r.startgg_event_id))
 
-  const mxEvents = tournaments.flatMap((t) => (t.events ?? []).map((e) => ({ startgg_event_id: Number(e.id), tournament: t, event: e })))
-  const unionWork = buildUnionWork(mxEvents, trackedEvents)
-
-  const { processed, deferred } = partitionByBudget(tournaments, budget)
+  const deferred: UnionWorkItem[] = []
+  const trackedProcessedIds = new Set<number>()
 
   let ingestedSets = 0
   let skippedEvents = 0
   let unsupportedGames = 0
+  let mxProcessed = 0
+
   try {
-    for (const tournament of processed) {
-      for (const event of tournament.events ?? []) {
-        const gameId = event.videogame?.id
-        const mapping = gameId != null ? STARTGG_GAME_TO_GG_GAME[gameId] : undefined
-
-        if (!mapping) {
-          unsupportedGames++
-          log.info({ requestId, event: 'startgg_poller.unsupported_game', eventId: event.id, videogameId: gameId, tournamentName: tournament.name })
-          continue
-        }
-
-        const tournamentId = await deterministicUuid(`startgg-event:${event.id}`)
-        await supabase.from('tournaments').upsert(
-          {
-            id: tournamentId,
-            organizer_id: Deno.env.get('STARTGG_SHADOW_ORGANIZER_ID'),
-            game_id: mapping.game_id,
-            format_id: mapping.format_id,
-            name: `${tournament.name} — ${event.name}`,
-            status: 'IN_PROGRESS',
-            ...(event.id ? { startgg_event_id: Number(event.id) } : {}),
-          },
-          { onConflict: 'id', ignoreDuplicates: false },
-        )
-        const phases = Array.isArray((event as unknown as { phases: unknown }).phases)
-          ? (event as unknown as { phases: StartggPhase[] }).phases
-          : (event as unknown as { phases: { nodes: StartggPhase[] } }).phases?.nodes ?? []
-        const phase = pickPhase(phases)
-        if (!phase) {
-          skippedEvents++
-          log.info({ requestId, event: 'startgg_poller.phase_skipped', eventId: event.id })
-          continue
-        }
-
-        const phaseSets = await fetchPhaseSets(startggToken, phase.id, budget, requestId)
-        // Accumulate every set ingested for this event across phases so the
-        // COMPLETED decision below covers the whole tournament, not just the
-        // picked phase (tasks.md 2.3; the phase-only check let a finished
-        // bracket finalize a tournament with unfinished pools).
-        const eventSets: StartggSet[] = []
-        const roundCounters = new Map<number, number>()
-        let hasSetIngestError = false
-        for (const set of phaseSets) {
-          try {
-            const row = buildSetRow({
-              tournamentId,
-              eventId: Number(event.id),
-              phaseId: Number(phase.id),
-              phaseName: phase.name,
-              eventStartsAt: event.startAt,
-              set,
-              slot: nextSlot(roundCounters, set.round),
-            })
-            await processSet(supabase, row)
-            eventSets.push(set)
-            ingestedSets++
-          } catch (err) {
-            hasSetIngestError = true
-            log.error({ requestId, event: 'startgg_poller.set_ingest_failed', setId: set.id, message: String(err) })
-          }
-        }
-
-        if (!hasSetIngestError && eventSets.length > 0 && allSetsCompleted(eventSets)) {
-          await supabase.from('tournaments').update({ status: 'COMPLETED' }).eq('id', tournamentId)
-        }
+    // --- Tracked mini-cycle: always runs first, independent of MX volume,
+    // so a manually-tracked tournament's ingestion never depends on
+    // whether the 60+ tournament MX cycle finishes before the Edge
+    // Function's ~150s wall-clock timeout (design.md "Polling budget"). ---
+    for (const eventId of trackedEventIds) {
+      if (budget.remaining < 2) {
+        deferred.push({ event_id: eventId, source: 'tracked', needsEventFetch: true })
+        continue
       }
+      if (!budget.tryConsume(1)) {
+        deferred.push({ event_id: eventId, source: 'tracked', needsEventFetch: true })
+        continue
+      }
+      const res = await startggGraphQL(EVENT_BY_ID_QUERY, { id: String(eventId) }, startggToken)
+      if (!res.ok) {
+        if (res.status === 429) throw new RateLimitError(res.retryAfterSeconds)
+        log.error({ requestId, event: 'startgg_poller.tracked_event_fetch_failed', eventId })
+        continue
+      }
+      // deno-lint-ignore no-explicit-any
+      const event = (res.data as any)?.event
+      if (!event) continue
+      const tournamentName = event.tournament?.name || 'Torneo Manual'
+
+      const ingestResult = await ingestEvent({ supabase, startggToken, budget, requestId, event, tournamentName })
+      ingestedSets += ingestResult.ingestedSets
+      if (ingestResult.skipped) skippedEvents++
+      if (ingestResult.unsupportedGame) unsupportedGames++
+      trackedProcessedIds.add(eventId)
+    }
+
+    // --- MX cycle: runs after tracked is already committed, so a
+    // timeout or upstream failure here never costs a tracked event. ---
+    budget.tryConsume(1)
+    const result = await startggGraphQL(MX_TOURNAMENTS_QUERY, { perPage: 25 }, startggToken)
+
+    let tournaments: StartggTournament[] = []
+    if (!result.ok) {
+      if (result.status === 429) throw new RateLimitError(result.retryAfterSeconds)
+      // Tracked is already ingested at this point — an MX-only failure
+      // degrades this cycle's MX coverage, it doesn't fail the request.
+      log.error({ requestId, event: 'startgg_poller.mx_query_failed', status: result.status })
+    } else {
+      tournaments = ((result.data as { tournaments?: { nodes?: StartggTournament[] } })?.tournaments?.nodes ?? []).filter(
+        (t) => t.countryCode === 'MX', // belt-and-suspenders: server-side filter already applied, re-checked here (spec "Non-MX tournament excluded")
+      )
+    }
+
+    const mxEvents = tournaments
+      .flatMap((t) => (t.events ?? []).map((e) => ({ startgg_event_id: Number(e.id), tournament: t, event: e })))
+      .filter((e) => !trackedProcessedIds.has(e.startgg_event_id)) // already ingested above; avoid redundant re-ingestion
+
+    // trackedEvents passed empty: tracked was already handled by the mini-cycle,
+    // so every remaining item here is MX-only (never needsEventFetch).
+    const unionWork = buildUnionWork(mxEvents, [])
+
+    for (const workItem of unionWork) {
+      if (budget.remaining < 1) {
+        deferred.push(workItem)
+        continue
+      }
+      const mxMatch = mxEvents.find((e) => e.startgg_event_id === workItem.event_id)
+      if (!mxMatch) continue
+
+      const ingestResult = await ingestEvent({
+        supabase,
+        startggToken,
+        budget,
+        requestId,
+        event: mxMatch.event,
+        tournamentName: mxMatch.tournament.name,
+      })
+      mxProcessed++
+      ingestedSets += ingestResult.ingestedSets
+      if (ingestResult.skipped) skippedEvents++
+      if (ingestResult.unsupportedGame) unsupportedGames++
     }
   } catch (err) {
     if (err instanceof RateLimitError) {
@@ -362,15 +440,11 @@ Deno.serve(async (req) => {
   }
 
   if (deferred.length > 0) {
-    for (const t of deferred) {
-      for (const e of t.events ?? []) {
-        if (e.id) {
-          await supabase.rpc('upsert_startgg_deferred_work', {
-            p_startgg_event_id: Number(e.id),
-            p_source: 'mx',
-          })
-        }
-      }
+    for (const item of deferred) {
+      await supabase.rpc('upsert_startgg_deferred_work', {
+        p_startgg_event_id: item.event_id,
+        p_source: item.source,
+      })
     }
   }
 
@@ -382,10 +456,14 @@ Deno.serve(async (req) => {
     cycle_requests: budget.remaining >= 0 ? 60 - budget.remaining : 60,
   })
 
+  const processed = trackedProcessedIds.size + mxProcessed
+
   log.info({
     requestId,
     event: 'startgg_poller.cycle_complete',
-    processed: processed.length,
+    trackedProcessed: trackedProcessedIds.size,
+    mxProcessed,
+    processed,
     deferred: deferred.length,
     skippedEvents,
     unsupportedGames,
@@ -393,7 +471,7 @@ Deno.serve(async (req) => {
   })
 
   return new Response(
-    JSON.stringify({ status: 'ok', processed: processed.length, deferred: deferred.length, skippedEvents, unsupportedGames, ingestedSets }),
+    JSON.stringify({ status: 'ok', trackedProcessed: trackedProcessedIds.size, mxProcessed, processed, deferred: deferred.length, skippedEvents, unsupportedGames, ingestedSets }),
     { status: 200, headers: { 'content-type': 'application/json' } },
   )
 })
