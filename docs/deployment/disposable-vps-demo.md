@@ -42,18 +42,38 @@ Compose publica únicamente `127.0.0.1:${APP_PORT}:3000` en el host. Anvil escuc
 El archivo `deploy/nginx/gg2.conf.template` recibe `APP_HOST` y `APP_PORT`. `envsubst` debe sustituir **solo** esas dos variables para conservar `$host`, `$remote_addr`, `$proxy_add_x_forwarded_for` y `$scheme`, que pertenecen a Nginx.
 
 ```bash
-set -a
-. ./.env.demo
-set +a
-envsubst '${APP_HOST} ${APP_PORT}' < deploy/nginx/gg2.conf.template | \
-  sudo tee /etc/nginx/sites-available/gg2 >/dev/null
-sudo ln -sfn /etc/nginx/sites-available/gg2 /etc/nginx/sites-enabled/gg2
-sudo nginx -t
-sudo systemctl reload nginx
-sudo certbot --nginx -d "$APP_HOST"
-sudo nginx -t
-sudo systemctl reload nginx
+(
+  set -eu
+  demo_value() {
+    awk -F= -v key="$1" '
+      $1 == key { value = substr($0, index($0, "=") + 1); count++ }
+      END {
+        if (count != 1 || value == "") exit 1
+        print value
+      }
+    ' .env.demo
+  }
+  APP_HOST=$(demo_value APP_HOST)
+  APP_PORT=$(demo_value APP_PORT)
+  case "$APP_HOST" in
+    ''|*[!A-Za-z0-9.-]*) echo 'APP_HOST must be a simple DNS hostname' >&2; exit 1 ;;
+  esac
+  case "$APP_PORT" in
+    ''|*[!0-9]*) echo 'APP_PORT must be numeric' >&2; exit 1 ;;
+  esac
+  export APP_HOST APP_PORT
+  envsubst '${APP_HOST} ${APP_PORT}' < deploy/nginx/gg2.conf.template | \
+    sudo tee /etc/nginx/sites-available/gg2 >/dev/null
+  sudo ln -sfn /etc/nginx/sites-available/gg2 /etc/nginx/sites-enabled/gg2
+  sudo nginx -t
+  sudo systemctl reload nginx
+  sudo certbot --nginx -d "$APP_HOST"
+  sudo nginx -t
+  sudo systemctl reload nginx
+)
 ```
+
+El bloque se ejecuta en un subshell y extrae solo `APP_HOST` y `APP_PORT` con `awk`; no carga `.env.demo` en el entorno. Por eso `SUPABASE_SERVICE_ROLE_KEY` nunca se exporta a `envsubst`, `sudo` ni Certbot.
 
 El template produce `/etc/nginx/sites-available/gg2` y el enlace activo `/etc/nginx/sites-enabled/gg2`. No hace falta un `upstream` separado para Anvil: `/rpc` llega al mismo puerto de Vite y Vite lo reenvía por la red privada de Docker.
 
@@ -114,7 +134,7 @@ En MetaMask agrega la red con:
 Captura el bytecode de `HouseBank` y el bloque actual, reinicia los servicios ordinarios y vuelve a ejecutar el bootstrap para comprobar que reutiliza el estado persistente:
 
 ```bash
-before_code=$(docker compose --env-file .env.demo exec -T app sh -lc \
+before_code=$(docker compose --env-file .env.demo exec -T settlement sh -lc \
   '. /demo-state/public.env; cast code "$VITE_HOUSE_BANK_ADDRESS" --rpc-url http://anvil:8545')
 before_block=$(curl --silent -H 'content-type: application/json' \
   --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}' \
@@ -122,7 +142,7 @@ before_block=$(curl --silent -H 'content-type: application/json' \
 docker compose --env-file .env.demo restart anvil app settlement
 docker compose --env-file .env.demo ps
 docker compose --env-file .env.demo run --rm bootstrap
-after_code=$(docker compose --env-file .env.demo exec -T app sh -lc \
+after_code=$(docker compose --env-file .env.demo exec -T settlement sh -lc \
   '. /demo-state/public.env; cast code "$VITE_HOUSE_BANK_ADDRESS" --rpc-url http://anvil:8545')
 test "$before_code" = "$after_code"
 test "$after_code" != "0x"
